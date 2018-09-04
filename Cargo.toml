@@ -4,7 +4,7 @@ version = "0.7.9"
 authors = ["Mark Thom <markjordanthom@gmail.com>"]
 repository = "https://github.com/mthom/prolog_parser"
 description = " An operator precedence parser for rusty-wam, an up and coming ISO Prolog implementation."
-license = "BSD-3"
+license = "BSD-3-Clause"
 
 [dependencies]
 num = "0.2"

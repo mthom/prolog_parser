@@ -696,7 +696,7 @@ impl<R: Read> Parser<R> {
         self.reduce_op(1400);
 
         if self.lexer.eof() && self.terms.len() > 1 {
-            return Err(ParserError::UnexpectedEOF);
+            return Err(ParserError::IncompleteReduction);
         }
 
         match self.terms.pop() {

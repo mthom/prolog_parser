@@ -276,11 +276,11 @@ pub enum ArithmeticError {
     UninstantiatedVar
 }
 
-#[derive(Debug)]
 pub enum ParserError {
     Arithmetic(ArithmeticError),
     BackQuotedString,
     // BuiltInArityMismatch(&'static str),
+    CannotParseCyclicTerm,
     UnexpectedChar(char),
     UnexpectedEOF,
     IO(IOError),
@@ -299,6 +299,55 @@ pub enum ParserError {
     ParseBigInt,
     ParseFloat,
     Utf8Conversion(Utf8Error)
+}
+
+impl ParserError {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            &ParserError::Arithmetic(_) =>
+                "arithmetic_error",
+            &ParserError::BackQuotedString =>
+                "back_quoted_string",
+            &ParserError::UnexpectedChar(_) =>
+                "unexpected_char",
+            &ParserError::UnexpectedEOF =>
+                "unexpected_end_of_file",
+            &ParserError::ExpectedRel =>
+                "expected_relation",
+            &ParserError::InadmissibleFact =>                
+                "inadmissible_fact",
+            &ParserError::InadmissibleQueryTerm =>                
+                "inadmissible_query_term",
+            &ParserError::IncompleteReduction =>
+                "incomplete_reduction",
+            &ParserError::InconsistentEntry =>
+                "inconsistent_entry",
+            &ParserError::InvalidModuleDecl =>
+                "invalid_module_declaration",
+            &ParserError::InvalidModuleExport =>
+                "invalid_module_export",
+            &ParserError::InvalidModuleResolution =>
+                "invalid_module_resolution",
+            &ParserError::InvalidRuleHead =>
+                "invalid_head_of_rule",
+            &ParserError::InvalidUseModuleDecl =>
+                "invalid_use_module_declaration",
+            &ParserError::IO(_) =>
+                "input_output_error",
+            &ParserError::MissingQuote =>
+                "missing_quote",
+            &ParserError::NonPrologChar =>
+                "non_prolog_character",
+            &ParserError::ParseBigInt =>
+                "cannot_parse_big_int",
+            &ParserError::ParseFloat =>
+                "cannot_parse_float",
+            &ParserError::Utf8Conversion(_) =>
+                "utf8_conversion_error",
+            &ParserError::CannotParseCyclicTerm =>
+                "cannot_parse_cyclic_term"
+        }        
+    }
 }
 
 impl From<ArithmeticError> for ParserError {

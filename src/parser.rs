@@ -140,6 +140,10 @@ impl<R: Read> Parser<R> {
                  terms:  Vec::new() }
     }
 
+    pub fn add_to_top(&mut self, head: &str) {
+        self.lexer.reader.extend(head.as_bytes().iter().map(|&b| Ok(b)));
+    }
+    
     fn get_term_name(&mut self, tt: TokenType) -> Option<ClauseName> {
         match tt {
             TokenType::Comma => Some(clause_name!(",")),
@@ -677,7 +681,7 @@ impl<R: Read> Parser<R> {
         Ok(())
     }
 
-    pub fn eof(&mut self) -> bool {
+    pub fn eof(&mut self) -> Result<bool, ParserError> {
         self.lexer.eof()
     }
 
@@ -695,7 +699,7 @@ impl<R: Read> Parser<R> {
 
         self.reduce_op(1400);
 
-        if self.lexer.eof() && self.terms.len() > 1 {
+        if self.terms.len() > 1 {
             return Err(ParserError::IncompleteReduction);
         }
 
@@ -716,7 +720,7 @@ impl<R: Read> Parser<R> {
         loop {
             terms.push(try!(self.read_term(op_dir)));
 
-            if self.lexer.eof() {
+            if self.lexer.eof()? {
                 break;
             }
         }

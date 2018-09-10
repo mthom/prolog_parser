@@ -12,6 +12,16 @@ use tabled_rc::*;
 use std::io::{BufReader, Bytes, Read};
 use std::rc::Rc;
 
+macro_rules! is_not_eof {
+    ($c:expr) => (
+        match $c {
+            Ok(c) => c,
+            Err(ParserError::UnexpectedEOF) => return Ok(true),
+            Err(e) => return Err(e)
+        }
+    )
+}
+
 macro_rules! consume_chars_with {
     ($token:expr, $e:expr) => {
         loop {
@@ -51,7 +61,7 @@ pub enum Token {
 
 pub struct Lexer<R> where R: Read {
     atom_tbl: TabledData<Atom>,
-    reader: PutBackN<Bytes<BufReader<R>>>,
+    pub(crate) reader: PutBackN<Bytes<BufReader<R>>>,
     flags: MachineFlags,
     line_num: usize,
 }
@@ -84,8 +94,24 @@ impl<R: Read> Lexer<R> {
         }
     }
 
-    pub fn eof(&mut self) -> bool {
-        self.reader.peek().is_none()
+    pub fn eof(&mut self) -> Result<bool, ParserError> {
+        if self.reader.peek().is_none() {
+            return Ok(true);
+        }
+        
+        let mut c = is_not_eof!(self.lookahead_char());
+        
+        while layout_char!(c) {
+            self.skip_char()?;
+
+            if self.reader.peek().is_none() {
+                return Ok(true);
+            }
+
+            c = is_not_eof!(self.lookahead_char());
+        }
+
+        Ok(false)
     }
 
     pub fn lookahead_char(&mut self) -> Result<char, ParserError> {
@@ -554,7 +580,7 @@ impl<R: Read> Lexer<R> {
         if decimal_point_char!(c) {
             self.skip_char()?;
 
-            if self.eof() {
+            if self.reader.peek().is_none() {
                 self.return_char('.');
                 let n = BigInt::parse_bytes(token.as_bytes(), 10).ok_or(ParserError::ParseBigInt)?;
                 Ok(Token::Constant(integer!(n)))
@@ -685,31 +711,9 @@ impl<R: Read> Lexer<R> {
 
                 if c == '.' {
                     self.skip_char()?;
-
-                    if self.eof() {
-                        return Ok(Token::End);
-                    }
-
-                    let c = self.lookahead_char()?;
-
-                    if layout_char!(c) || c == '%' {
-                        let mut c = c;
-
-                        while layout_char!(c) {
-                            try!(self.skip_char());
-
-                            match self.lookahead_char() {
-                                Ok(ch) => c = ch,
-                                Err(_) => break
-                            };
-                        }
-
-                        return Ok(Token::End);
-                    } else {
-                        self.return_char('.');
-                    }
+                    return Ok(Token::End);
                 }
-
+                
                 if decimal_digit_char!(c) {
                     return self.number_token();
                 }

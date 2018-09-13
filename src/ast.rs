@@ -916,3 +916,36 @@ impl Term {
         }
     }
 }
+
+#[derive(Clone, Copy)]
+pub struct CompositeOp<'a, 'b> {
+    pub op_dir: &'a OpDir,
+    pub static_op_dir: Option<&'b OpDir>
+}
+
+#[macro_export]
+macro_rules! composite_op {
+    ($include_machine_p:expr, $op_dir:expr, $machine_op_dir:expr) => (
+        CompositeOp { op_dir: $op_dir,
+                      static_op_dir: if $include_machine_p {
+                          Some($machine_op_dir)
+                      } else {
+                          None
+                      }}
+    );
+    ($op_dir:expr) => (
+        CompositeOp { op_dir: $op_dir, static_op_dir: None }
+    )
+}
+
+impl<'a, 'b> CompositeOp<'a, 'b> {
+    #[inline]
+    pub(crate)
+    fn get(&self, name: ClauseName, fixity: Fixity) -> Option<(Specifier, usize, ClauseName)>
+    {
+        self.op_dir.get(&(name.clone(), fixity))
+            .or_else(move || self.static_op_dir.and_then(|op_dir| op_dir.get(&(name, fixity))))
+            .cloned()
+    }
+}
+

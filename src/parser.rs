@@ -216,20 +216,20 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn get_desc(&self, name: ClauseName, op_dir: &OpDir) -> Option<OpDesc> {
+    fn get_desc(&self, name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc> {
         let mut op_desc = OpDesc { pre: 0, inf: 0, post: 0, spec: 0 };
 
-        if let Some(&(spec, pri, _)) = op_dir.get(&(name.clone(), Fixity::Pre)) {
+        if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Pre) {
             op_desc.pre = pri;
             op_desc.spec |= spec;
         }
 
-        if let Some(&(spec, pri, _)) = op_dir.get(&(name.clone(), Fixity::Post)) {
+        if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Post) {
             op_desc.post = pri;
             op_desc.spec |= spec;
         }
 
-        if let Some(&(spec, pri, _)) = op_dir.get(&(name.clone(), Fixity::In)) {
+        if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::In) {
             op_desc.inf = pri;
             op_desc.spec |= spec;
         }
@@ -580,7 +580,7 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn shift_op(&mut self, name: ClauseName, op_dir: &OpDir) -> Result<bool, ParserError> {
+    fn shift_op(&mut self, name: ClauseName, op_dir: CompositeOp) -> Result<bool, ParserError> {
         if let Some(OpDesc { pre, inf, post, spec }) = self.get_desc(name.clone(), op_dir) {
             if pre > 0 && inf + post > 0 {
                 match try!(self.lexer.lookahead_char()) {
@@ -638,7 +638,7 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn shift_token(&mut self, token: Token, op_dir: &OpDir) -> Result<(), ParserError> {
+    fn shift_token(&mut self, token: Token, op_dir: CompositeOp) -> Result<(), ParserError> {
         match token {
             Token::Constant(c) =>
                 if let Some(name) = self.atomize_constant(&c) {
@@ -685,7 +685,7 @@ impl<R: Read> Parser<R> {
         self.lexer.eof()
     }
 
-    pub fn read_term(&mut self, op_dir: &OpDir) -> Result<Term, ParserError> {
+    pub fn read_term(&mut self, op_dir: CompositeOp) -> Result<Term, ParserError> {
         loop {
             let token = try!(self.lexer.next_token());
             let at_end = Token::End == token;
@@ -713,7 +713,7 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    pub fn read(&mut self, op_dir: &OpDir) -> Result<Vec<Term>, ParserError>
+    pub fn read(&mut self, op_dir: CompositeOp) -> Result<Vec<Term>, ParserError>
     {
         let mut terms = Vec::new();
 

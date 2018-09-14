@@ -314,9 +314,9 @@ impl ParserError {
                 "unexpected_end_of_file",
             &ParserError::ExpectedRel =>
                 "expected_relation",
-            &ParserError::InadmissibleFact =>                
+            &ParserError::InadmissibleFact =>
                 "inadmissible_fact",
-            &ParserError::InadmissibleQueryTerm =>                
+            &ParserError::InadmissibleQueryTerm =>
                 "inadmissible_query_term",
             &ParserError::IncompleteReduction =>
                 "incomplete_reduction",
@@ -346,7 +346,7 @@ impl ParserError {
                 "utf8_conversion_error",
             &ParserError::CannotParseCyclicTerm =>
                 "cannot_parse_cyclic_term"
-        }        
+        }
     }
 }
 
@@ -927,7 +927,7 @@ pub struct CompositeOp<'a, 'b> {
 macro_rules! composite_op {
     ($include_machine_p:expr, $op_dir:expr, $machine_op_dir:expr) => (
         CompositeOp { op_dir: $op_dir,
-                      static_op_dir: if $include_machine_p {
+                      static_op_dir: if !$include_machine_p {
                           Some($machine_op_dir)
                       } else {
                           None
@@ -948,4 +948,3 @@ impl<'a, 'b> CompositeOp<'a, 'b> {
             .cloned()
     }
 }
-

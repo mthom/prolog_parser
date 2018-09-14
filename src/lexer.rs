@@ -711,7 +711,19 @@ impl<R: Read> Lexer<R> {
 
                 if c == '.' {
                     self.skip_char()?;
-                    return Ok(Token::End);
+                    
+                    match self.lookahead_char() {
+                        Ok(c) if layout_char!(c) || c == '%' => {
+                            if new_line_char!(c) {
+                                self.skip_char()?;
+                            }
+
+                            return Ok(Token::End);
+                        },
+                        Err(ParserError::UnexpectedEOF) =>
+                            return Ok(Token::End),
+                        _ => self.return_char('.')
+                    };
                 }
                 
                 if decimal_digit_char!(c) {

@@ -134,7 +134,7 @@ pub struct Parser<R> where R: Read {
 impl<R: Read> Parser<R> {
     pub fn new(inner: R, atom_tbl: TabledData<Atom>, flags: MachineFlags) -> Self
     {
-        Parser { atom_tbl: atom_tbl.clone(), 
+        Parser { atom_tbl: atom_tbl.clone(),
                  lexer:  Lexer::new(atom_tbl, flags, inner),
                  stack:  Vec::new(),
                  terms:  Vec::new() }
@@ -143,13 +143,13 @@ impl<R: Read> Parser<R> {
     pub fn add_to_top(&mut self, head: &str) {
         self.lexer.reader.extend(head.as_bytes().iter().map(|&b| Ok(b)));
     }
-    
+
     fn get_term_name(&mut self, tt: TokenType) -> Option<ClauseName> {
         match tt {
             TokenType::Comma => Some(clause_name!(",")),
             TokenType::Term =>
                 match self.terms.pop() {
-                    Some(Term::Constant(_, Constant::Atom(atom))) =>
+                    Some(Term::Constant(_, Constant::Atom(atom, _))) =>
                         Some(atom),
                     Some(term) => {
                         self.terms.push(term);
@@ -190,7 +190,7 @@ impl<R: Read> Parser<R> {
                     // reduce negation of numbers from structures to numbers.
                     match &name {
                         &Term::Clause(_, ref name, ..)
-                      | &Term::Constant(_, Constant::Atom(ref name)) if name.as_str() == "-" =>
+                      | &Term::Constant(_, Constant::Atom(ref name, _)) if name.as_str() == "-" =>
                           if let Term::Constant(r, Constant::Number(n)) = arg1 {
                               self.terms.push(Term::Constant(r, Constant::Number(-n)));
                               self.stack.push(TokenDesc { tt: TokenType::Term,
@@ -203,10 +203,10 @@ impl<R: Read> Parser<R> {
                     };
                 }
 
-                if let Term::Constant(_, Constant::Atom(name)) = name {
-                    let term = Term::Clause(Cell::default(), name,
-                                            vec![Box::new(arg1)], Some(fixity));
-
+                if let Term::Constant(_, Constant::Atom(name, _)) = name {
+                    let term = Term::Clause(Cell::default(), name, vec![Box::new(arg1)],
+                                            Some(fixity));
+                    
                     self.terms.push(term);
                     self.stack.push(TokenDesc { tt: TokenType::Term,
                                                 priority: td.priority,
@@ -241,8 +241,26 @@ impl<R: Read> Parser<R> {
         }
     }
 
+    fn promote_atom_op(&mut self, cell: Cell<RegType>, atom: ClauseName, spec: u32) -> TokenType
+    {
+        let fixity = if is_infix!(spec) {
+            Some(Fixity::In)
+        } else if is_prefix!(spec) {
+            Some(Fixity::Pre)
+        } else if is_postfix!(spec) {
+            Some(Fixity::Post)
+        } else {
+            None
+        };
+
+        self.terms.push(Term::Constant(cell, Constant::Atom(atom, fixity)));
+        TokenType::Term
+    }
+
     fn shift(&mut self, token: Token, priority: usize, spec: u32) {
         let tt = match token {
+            Token::Constant(Constant::Atom(atom, _)) => 
+                self.promote_atom_op(Cell::default(), atom, spec),
             Token::Constant(c) => {
                 self.terms.push(Term::Constant(Cell::default(), c));
                 TokenType::Term
@@ -530,7 +548,7 @@ impl<R: Read> Parser<R> {
                         oc.spec = TERM;
 
                         if let Some(atom) = sep_to_atom(td.tt) {
-                            let term = Term::Constant(Cell::default(), Constant::Atom(atom));
+                            let term = Term::Constant(Cell::default(), Constant::Atom(atom, None));
                             self.terms.push(Term::Clause(Cell::default(), clause_name!("{}"),
                                                          vec![Box::new(term)], None));
                         } else {
@@ -568,7 +586,7 @@ impl<R: Read> Parser<R> {
         match self.stack.remove(idx).tt {
             TokenType::Open | TokenType::OpenCT => {
                 if let Some(atom) = sep_to_atom(self.stack[idx].tt) {
-                    self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom)));
+                    self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, None)));
                 }
 
                 self.stack[idx].spec = TERM;
@@ -588,7 +606,7 @@ impl<R: Read> Parser<R> {
                         // can't be prefix, so either inf == 0
                         // or post == 0.
                         self.reduce_op(inf + post);
-                        self.shift(Token::Constant(Constant::Atom(name)),
+                        self.shift(Token::Constant(Constant::Atom(name, None)),
                                    inf + post,
                                    spec & (XFX | XFY | YFX | YF | XF));
                     },
@@ -598,28 +616,28 @@ impl<R: Read> Parser<R> {
 
                             // rterm.c: 412
                             if is_term!(pspec) {
-                                self.shift(Token::Constant(Constant::Atom(name)),
+                                self.shift(Token::Constant(Constant::Atom(name, None)),
                                            inf + post,
                                            spec & (XFX | XFY | YFX | XF | YF));
                             } else {
-                                self.shift(Token::Constant(Constant::Atom(name)),
+                                self.shift(Token::Constant(Constant::Atom(name, None)),
                                            pre,
                                            prefix!(spec));
                             }
                         } else {
-                            self.shift(Token::Constant(Constant::Atom(name)),
+                            self.shift(Token::Constant(Constant::Atom(name, None)),
                                        pre,
                                        spec & (FX | FY));
                         }
                 }
             } else {
                 self.reduce_op(pre + inf + post); // only one non-zero priority among these.
-                self.shift(Token::Constant(Constant::Atom(name)), pre + inf + post, spec);
+                self.shift(Token::Constant(Constant::Atom(name, None)), pre + inf + post, spec);
             }
 
             Ok(true)
         } else { // not an operator.
-            Ok(false)            
+            Ok(false)
         }
     }
 
@@ -632,7 +650,7 @@ impl<R: Read> Parser<R> {
 
     fn atomize_constant(&self, c: &Constant) -> Option<ClauseName> {
         match c {
-            &Constant::Atom(ref name) => Some(name.clone()),
+            &Constant::Atom(ref name, _) => Some(name.clone()),
             &Constant::Char(c) => Some(clause_name!(c.to_string(), self.atom_tbl)),
             _ => None
         }

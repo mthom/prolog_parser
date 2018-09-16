@@ -48,10 +48,10 @@ macro_rules! clause_name {
 #[macro_export]
 macro_rules! atom {
     ($e:expr, $tbl:expr) => (
-        Constant::Atom(ClauseName::User(tabled_rc!($e, $tbl)))
+        Constant::Atom(ClauseName::User(tabled_rc!($e, $tbl)), None)
     );
     ($e:expr) => (
-        Constant::Atom(clause_name!($e))
+        Constant::Atom(clause_name!($e), None)
     )
 }
 
@@ -78,6 +78,11 @@ macro_rules! is_lterm {
 
 macro_rules! is_op {
     ($x:expr) => ( $x & (XF | YF | FX | FY | XFX | XFY | YFX) != 0 )
+}
+
+#[macro_export]
+macro_rules! is_prefix {
+    ($x:expr) => ( $x & (FX | FY) != 0 )
 }
 
 #[macro_export]
@@ -375,7 +380,7 @@ pub enum Fixity {
 
 #[derive(Clone, Hash)]
 pub enum Constant {
-    Atom(ClauseName),
+    Atom(ClauseName, Option<Fixity>),
     Char(char),
     Number(Number),
     String(StringList),
@@ -386,7 +391,7 @@ pub enum Constant {
 impl fmt::Display for Constant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &Constant::Atom(ref atom) =>
+            &Constant::Atom(ref atom, _) =>
                 if atom.as_str().chars().any(|c| "`.$'\" ".contains(c)) {
                     write!(f, "'{}'", atom.as_str())
                 } else {
@@ -409,12 +414,12 @@ impl fmt::Display for Constant {
 impl PartialEq for Constant {
     fn eq(&self, other: &Constant) -> bool {
         match (self, other) {
-            (&Constant::Atom(ref atom), &Constant::Char(c))
-          | (&Constant::Char(c), &Constant::Atom(ref atom)) => {
+            (&Constant::Atom(ref atom, _), &Constant::Char(c))
+          | (&Constant::Char(c), &Constant::Atom(ref atom, _)) => {
               let s = atom.as_str();
               c.len_utf8() == s.len() && Some(c) == s.chars().next()
             },
-            (&Constant::Atom(ref a1), &Constant::Atom(ref a2)) =>
+            (&Constant::Atom(ref a1, _), &Constant::Atom(ref a2, _)) =>
                 a1.as_str() == a2.as_str(),
             (&Constant::Char(c1), &Constant::Char(c2)) =>
                 c1 == c2,
@@ -436,7 +441,7 @@ impl Eq for Constant {}
 impl Constant {
     pub fn to_atom(self) -> Option<ClauseName> {
         match self {
-            Constant::Atom(a) => Some(a.defrock_brackets()),
+            Constant::Atom(a, _) => Some(a.defrock_brackets()),
             _ => None
         }
     }
@@ -903,7 +908,7 @@ impl Term {
 
     pub fn name(&self) -> Option<ClauseName> {
         match self {
-            &Term::Constant(_, Constant::Atom(ref atom))
+            &Term::Constant(_, Constant::Atom(ref atom, _))
           | &Term::Clause(_, ref atom, ..) => Some(atom.clone()),
             _ => None
         }

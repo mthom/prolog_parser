@@ -760,7 +760,7 @@ impl<R: Read> Lexer<R> {
 
                     if let DoubleQuotes::Atom = self.flags.double_quotes {
                         let s = clause_name!(s, self.atom_tbl);
-                        return Ok(Token::Constant(Constant::Atom(s)));
+                        return Ok(Token::Constant(Constant::Atom(s, None)));
                     } else { // for now.. == DoubleQuotes::Chars
                         let s = StringList::new(s, false);
                         return Ok(Token::Constant(Constant::String(s)));

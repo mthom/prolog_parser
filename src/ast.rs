@@ -290,10 +290,12 @@ pub enum ParserError {
     UnexpectedEOF,
     IO(IOError),
     ExpectedRel,
+    ExpectedTopLevelTerm,
     InadmissibleFact,
     InadmissibleQueryTerm,
     IncompleteReduction,
     InconsistentEntry,
+    InvalidHook,
     InvalidModuleDecl,
     InvalidModuleExport,
     InvalidRuleHead,
@@ -319,6 +321,8 @@ impl ParserError {
                 "unexpected_end_of_file",
             &ParserError::ExpectedRel =>
                 "expected_relation",
+            &ParserError::ExpectedTopLevelTerm =>
+                "expected_atom_or_cons_or_clause",
             &ParserError::InadmissibleFact =>
                 "inadmissible_fact",
             &ParserError::InadmissibleQueryTerm =>
@@ -327,6 +331,8 @@ impl ParserError {
                 "incomplete_reduction",
             &ParserError::InconsistentEntry =>
                 "inconsistent_entry",
+            &ParserError::InvalidHook =>
+                "invalid_hook",
             &ParserError::InvalidModuleDecl =>
                 "invalid_module_declaration",
             &ParserError::InvalidModuleExport =>

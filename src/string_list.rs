@@ -85,6 +85,17 @@ impl StringList {
     }
 
     #[inline]
+    pub fn len(&self) -> usize {
+        self.borrow().len()
+    }
+    
+    #[inline]
+    pub fn truncate(&mut self, len: usize) {
+        self.body.0.borrow_mut().truncate(len);
+        self.expandable.set(true);
+    }
+    
+    #[inline]
     pub fn push_char(&mut self, c: char) -> Self {
         if self.expandable.get() {
             self.body.0.borrow_mut().push(c);

@@ -554,6 +554,37 @@ impl<'a> From<&'a TabledRc<Atom>> for ClauseName {
 }
 
 impl ClauseName {
+    #[inline]
+    pub fn owning_module(&self) -> Self {
+        match self {
+            &ClauseName::User(ref name) => {
+                let module = name.owning_module();
+                 ClauseName::User(TabledRc { atom: module.clone(),
+                                             table: TabledData::new(module) })
+            },
+            _ => clause_name!("user")
+        }
+    }
+
+    #[inline]
+    pub fn to_rc(&self) -> Rc<String> {
+        match self {
+            &ClauseName::BuiltIn(s) => Rc::new(s.to_string()),
+            &ClauseName::User(ref rc) => rc.inner()
+        }
+    }
+
+    #[inline]
+    pub fn with_table(self, atom_tbl: TabledData<Atom>) -> Self {
+        match self {
+            ClauseName::BuiltIn(_) => self,
+            ClauseName::User(mut name) => {
+                name.table = atom_tbl;
+                ClauseName::User(name)
+            }
+        }
+    }
+    
     pub fn as_str(&self) -> &str {
         match self {
             &ClauseName::BuiltIn(s) => s,
@@ -574,7 +605,7 @@ impl ClauseName {
             ClauseName::BuiltIn(s) =>
                 ClauseName::BuiltIn(defrock_brackets(s)),
             ClauseName::User(s) =>
-                ClauseName::User(tabled_rc!(defrock_brackets(s.as_str()).to_owned(), s.table()))
+                ClauseName::User(tabled_rc!(defrock_brackets(s.as_str()).to_owned(), s.table))
         }
     }
 }

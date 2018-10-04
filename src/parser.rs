@@ -125,7 +125,6 @@ struct OpDesc {
 }
 
 pub struct Parser<R> where R: Read {
-    pub(crate) atom_tbl: TabledData<Atom>,
     lexer: Lexer<R>,
     stack: Vec<TokenDesc>,
     terms: Vec<Term>,
@@ -134,12 +133,16 @@ pub struct Parser<R> where R: Read {
 impl<R: Read> Parser<R> {
     pub fn new(inner: R, atom_tbl: TabledData<Atom>, flags: MachineFlags) -> Self
     {
-        Parser { atom_tbl: atom_tbl.clone(),
-                 lexer:  Lexer::new(atom_tbl, flags, inner),
+        Parser { lexer:  Lexer::new(atom_tbl, flags, inner),
                  stack:  Vec::new(),
                  terms:  Vec::new() }
     }
 
+    #[inline]
+    pub fn set_atom_tbl(&mut self, atom_tbl: TabledData<Atom>) {
+        self.lexer.atom_tbl = atom_tbl;
+    }
+    
     pub fn add_to_top(&mut self, head: &str) {
         self.lexer.reader.extend(head.as_bytes().iter().map(|&b| Ok(b)));
     }
@@ -531,7 +534,7 @@ impl<R: Read> Parser<R> {
                 td.spec = TERM;
 
                 let term = Term::Constant(Cell::default(),
-                                          atom!("{}", self.atom_tbl));
+                                          atom!("{}", self.lexer.atom_tbl));
                 self.terms.push(term);
                 return Ok(true);
             }
@@ -651,7 +654,8 @@ impl<R: Read> Parser<R> {
     fn atomize_constant(&self, c: &Constant) -> Option<ClauseName> {
         match c {
             &Constant::Atom(ref name, _) => Some(name.clone()),
-            &Constant::Char(c) => Some(clause_name!(c.to_string(), self.atom_tbl)),
+            &Constant::Char(c) =>
+                Some(clause_name!(c.to_string(), self.lexer.atom_tbl)),
             _ => None
         }
     }

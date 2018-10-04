@@ -1,23 +1,48 @@
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use std::rc::Rc;
+use std::rc::{Rc};
 
-pub type TabledData<T> = Rc<RefCell<HashSet<Rc<T>>>>;
+pub struct TabledData<T> {
+    table: Rc<RefCell<HashSet<Rc<T>>>>,
+    pub(crate) module_name: Rc<String>
+}
+
+impl<T> Clone for TabledData<T> {
+    fn clone(&self) -> Self {
+        TabledData { table: self.table.clone(),
+                     module_name: self.module_name.clone() }
+    }
+}
+
+impl<T: Hash + Eq> TabledData<T> {
+    #[inline]
+    pub fn new(module_name: Rc<String>) -> Self {
+        TabledData {
+            table: Rc::new(RefCell::new(HashSet::new())),
+            module_name
+        }
+    }
+    
+    #[inline]
+    pub fn borrow_mut(&self) -> RefMut<HashSet<Rc<T>>> {
+        self.table.borrow_mut()
+    }
+}
 
 pub struct TabledRc<T: Hash + Eq> {
-    atom: Rc<T>,
-    table: TabledData<T>
+    pub(crate) atom: Rc<T>,
+    pub table: TabledData<T>
 }
 
 // this Clone instance is manually defined to prevent the compiler
 // from complaining when deriving Clone for StringList.
 impl<T: Hash + Eq> Clone for TabledRc<T> {
     fn clone(&self) -> Self {
-        TabledRc { atom: self.atom.clone(), table: self.table().clone() }
+        TabledRc { atom: self.atom.clone(), table: self.table.clone() }
     }
 }
 
@@ -50,7 +75,7 @@ impl<T: Hash + Eq> Hash for TabledRc<T> {
     }
 }
 
-impl<T: Hash + Eq> TabledRc<T> {
+impl<T: Hash + Eq + ToString> TabledRc<T> {
     pub fn new(atom: T, table: TabledData<T>) -> Self {
         let atom = match table.borrow_mut().take(&atom) {
             Some(atom) => atom.clone(),
@@ -62,8 +87,14 @@ impl<T: Hash + Eq> TabledRc<T> {
         TabledRc { atom, table }
     }
 
-    pub fn table(&self) -> TabledData<T> {
-        self.table.clone()
+    #[inline]
+    pub fn inner(&self) -> Rc<T> {
+        self.atom.clone()
+    }
+    
+    #[inline]
+    pub(crate) fn owning_module(&self) -> Rc<String> {
+        self.table.module_name.clone()
     }
 }
 

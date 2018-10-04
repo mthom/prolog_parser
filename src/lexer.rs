@@ -60,7 +60,7 @@ pub enum Token {
 }
 
 pub struct Lexer<R> where R: Read {
-    atom_tbl: TabledData<Atom>,
+    pub(crate) atom_tbl: TabledData<Atom>,
     pub(crate) reader: PutBackN<Bytes<BufReader<R>>>,
     flags: MachineFlags,
     line_num: usize,

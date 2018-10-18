@@ -10,14 +10,14 @@ use std::mem::swap;
 enum TokenType {
     Term,
     Open,
-    Close,
     OpenCT,
     OpenList,       // '['
-    CloseList,      // ']'
     OpenCurly,      // '{'
-    CloseCurly,     // '}'
     HeadTailSeparator, // '|'
     Comma,          // ','
+    Close,
+    CloseList,      // ']'
+    CloseCurly,     // '}'
     End
 }
 
@@ -142,7 +142,7 @@ impl<R: Read> Parser<R> {
     pub fn set_atom_tbl(&mut self, atom_tbl: TabledData<Atom>) {
         self.lexer.atom_tbl = atom_tbl;
     }
-    
+
     pub fn add_to_top(&mut self, head: &str) {
         self.lexer.reader.extend(head.as_bytes().iter().map(|&b| Ok(b)));
     }
@@ -209,7 +209,7 @@ impl<R: Read> Parser<R> {
                 if let Term::Constant(_, Constant::Atom(name, _)) = name {
                     let term = Term::Clause(Cell::default(), name, vec![Box::new(arg1)],
                                             Some(fixity));
-                    
+
                     self.terms.push(term);
                     self.stack.push(TokenDesc { tt: TokenType::Term,
                                                 priority: td.priority,
@@ -262,7 +262,7 @@ impl<R: Read> Parser<R> {
 
     fn shift(&mut self, token: Token, priority: usize, spec: u32) {
         let tt = match token {
-            Token::Constant(Constant::Atom(atom, _)) => 
+            Token::Constant(Constant::Atom(atom, _)) =>
                 self.promote_atom_op(Cell::default(), atom, spec),
             Token::Constant(c) => {
                 self.terms.push(Term::Constant(Cell::default(), c));
@@ -697,7 +697,17 @@ impl<R: Read> Parser<R> {
                 self.reduce_op(1000);
                 self.shift(Token::Comma, 1000, XFY);
             },
-            Token::End => {}
+            Token::End =>
+                match self.stack.last().map(|t| t.tt) {
+                    Some(TokenType::Open)
+                  | Some(TokenType::OpenCT)
+                  | Some(TokenType::OpenList)
+                  | Some(TokenType::OpenCurly)
+                  | Some(TokenType::HeadTailSeparator)
+                  | Some(TokenType::Comma)
+                        => return Err(ParserError::IncompleteReduction),
+                    _ => {}
+                }
         }
 
         Ok(())

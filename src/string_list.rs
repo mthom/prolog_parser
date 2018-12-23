@@ -22,14 +22,14 @@ pub struct StringList {
 }
 
 impl Hash for StringList {
-    #[inline]    
+    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         (self.borrow().as_str(), self.cursor, self.expandable.get()).hash(state);
     }
 }
 
 impl PartialOrd for StringList {
-    #[inline]    
+    #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.body.cmp(&other.body))
     }
@@ -75,26 +75,37 @@ impl StringList {
     }
 
     #[inline]
-    pub fn set_expandable(&self) {
-        self.expandable.set(true);
-    }
-
-    #[inline]
-    pub fn set_non_expandable(&self) {
-        self.expandable.set(false);
+    pub fn set_expandable(&self, value: bool) {
+        self.expandable.set(value);
     }
 
     #[inline]
     pub fn len(&self) -> usize {
-        self.borrow().len()
+        self.borrow().len() - self.cursor
     }
-    
+
     #[inline]
     pub fn truncate(&mut self, len: usize) {
         self.body.0.borrow_mut().truncate(len);
         self.expandable.set(true);
     }
-    
+
+    #[inline]
+    pub fn starts_with(&self, pat: &StringList) -> bool {
+        self.borrow()[self.cursor ..].starts_with(&pat.borrow()[pat.cursor ..])
+    }
+
+    /* Called under the assumption that self is a prefix of suffix,
+       and we want to copy the rest of suffix into self.
+     */
+    #[inline]
+    pub fn append_suffix(&mut self, suffix: &StringList) {
+        if self.expandable.get() {
+            let cursor = suffix.cursor + self.len();
+            self.body.0.borrow_mut().extend(suffix.borrow()[cursor ..].chars());
+        }
+    }
+
     #[inline]
     pub fn push_char(&mut self, c: char) -> Self {
         if self.expandable.get() {

@@ -86,7 +86,7 @@ impl<T: Hash + Eq + ToString> TabledRc<T> {
 
         TabledRc { atom, table }
     }
-
+    
     #[inline]
     pub fn inner(&self) -> Rc<T> {
         self.atom.clone()

@@ -172,7 +172,7 @@ impl<R: Read> Parser<R> {
                     let term = Term::Clause(Cell::default(),
                                             name,
                                             vec![Box::new(arg1), Box::new(arg2)],
-                                            Some(Fixity::In));
+                                            Some((td.priority, spec)));
 
                     self.terms.push(term);
                     self.stack.push(TokenDesc { tt: TokenType::Term,
@@ -208,7 +208,7 @@ impl<R: Read> Parser<R> {
 
                 if let Term::Constant(_, Constant::Atom(name, _)) = name {
                     let term = Term::Clause(Cell::default(), name, vec![Box::new(arg1)],
-                                            Some(fixity));
+                                            Some((td.priority, spec)));
 
                     self.terms.push(term);
                     self.stack.push(TokenDesc { tt: TokenType::Term,
@@ -244,26 +244,28 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn promote_atom_op(&mut self, cell: Cell<RegType>, atom: ClauseName, spec: u32) -> TokenType
+    fn promote_atom_op(&mut self, cell: Cell<RegType>, atom: ClauseName, spec: Specifier,
+                       priority: usize)
+                       -> TokenType
     {
-        let fixity = if is_infix!(spec) {
-            Some(Fixity::In)
+        let op_decl = if is_infix!(spec) {
+            Some((priority, spec))
         } else if is_prefix!(spec) {
-            Some(Fixity::Pre)
+            Some((priority, spec))
         } else if is_postfix!(spec) {
-            Some(Fixity::Post)
+            Some((priority, spec))
         } else {
             None
         };
 
-        self.terms.push(Term::Constant(cell, Constant::Atom(atom, fixity)));
+        self.terms.push(Term::Constant(cell, Constant::Atom(atom, op_decl)));
         TokenType::Term
     }
 
-    fn shift(&mut self, token: Token, priority: usize, spec: u32) {
+    fn shift(&mut self, token: Token, priority: usize, spec: Specifier) {
         let tt = match token {
             Token::Constant(Constant::Atom(atom, _)) =>
-                self.promote_atom_op(Cell::default(), atom, spec),
+                self.promote_atom_op(Cell::default(), atom, spec, priority),
             Token::Constant(c) => {
                 self.terms.push(Term::Constant(Cell::default(), c));
                 TokenType::Term

@@ -386,7 +386,7 @@ pub enum Fixity {
 
 #[derive(Clone, Hash)]
 pub enum Constant {
-    Atom(ClauseName, Option<Fixity>),
+    Atom(ClauseName, Option<(usize, Specifier)>),
     Char(char),
     Number(Number),
     String(StringList),
@@ -921,7 +921,7 @@ impl Neg for Number {
 #[derive(PartialEq, Eq, Clone)]
 pub enum Term {
     AnonVar,
-    Clause(Cell<RegType>, ClauseName, Vec<Box<Term>>, Option<Fixity>),
+    Clause(Cell<RegType>, ClauseName, Vec<Box<Term>>, Option<(usize, Specifier)>),
     Cons(Cell<RegType>, Box<Term>, Box<Term>),
     Constant(Cell<RegType>, Constant),
     Var(Cell<VarReg>, Rc<Var>)

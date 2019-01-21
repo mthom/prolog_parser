@@ -95,30 +95,37 @@ macro_rules! is_infix {
     ($x:expr) => ( ($x & (XFX | XFY | YFX)) != 0 )
 }
 
+#[macro_export]
 macro_rules! is_xfx {
     ($x:expr) => ( ($x & XFX) != 0 )
 }
 
+#[macro_export]
 macro_rules! is_xfy {
     ($x:expr) => ( ($x & XFY) != 0 )
 }
 
+#[macro_export]
 macro_rules! is_yfx {
     ($x:expr) => ( ($x & YFX) != 0 )
 }
 
+#[macro_export]
 macro_rules! is_yf {
     ($x:expr) => ( ($x & YF) != 0 )
 }
 
+#[macro_export]
 macro_rules! is_xf {
     ($x:expr) => ( ($x & XF) != 0 )
 }
 
+#[macro_export]
 macro_rules! is_fx {
     ($x:expr) => ( ($x & FX) != 0 )
 }
 
+#[macro_export]
 macro_rules! is_fy {
     ($x:expr) => ( ($x & FY) != 0 )
 }

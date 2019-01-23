@@ -164,7 +164,7 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn push_binary_op(&mut self, td: TokenDesc, spec: Specifier)
+    fn push_binary_op(&mut self, td: TokenDesc, spec: Specifier, assoc: u32)
     {
         if let Some(arg2) = self.terms.pop() {
             if let Some(name) = self.get_term_name(td.tt) {
@@ -172,7 +172,7 @@ impl<R: Read> Parser<R> {
                     let term = Term::Clause(Cell::default(),
                                             name,
                                             vec![Box::new(arg1), Box::new(arg2)],
-                                            Some((td.priority, spec)));
+                                            Some((td.priority, assoc)));
 
                     self.terms.push(term);
                     self.stack.push(TokenDesc { tt: TokenType::Term,
@@ -183,13 +183,13 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn push_unary_op(&mut self, td: TokenDesc, spec: Specifier, fixity: Fixity)
+    fn push_unary_op(&mut self, td: TokenDesc, spec: Specifier, assoc: u32)
     {
         if let Some(mut arg1) = self.terms.pop() {
             if let Some(mut name) = self.terms.pop() {
-                if let Fixity::Post = fixity {
+                if is_postfix!(assoc) {
                     swap(&mut arg1, &mut name);
-                } else if let Fixity::Pre = fixity {
+                } else if is_prefix!(assoc) {
                     // reduce negation of numbers from structures to numbers.
                     match &name {
                         &Term::Clause(_, ref name, ..)
@@ -208,7 +208,7 @@ impl<R: Read> Parser<R> {
 
                 if let Term::Constant(_, Constant::Atom(name, _)) = name {
                     let term = Term::Clause(Cell::default(), name, vec![Box::new(arg1)],
-                                            Some((td.priority, spec)));
+                                            Some((td.priority, assoc)));
 
                     self.terms.push(term);
                     self.stack.push(TokenDesc { tt: TokenType::Term,
@@ -244,8 +244,7 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn promote_atom_op(&mut self, cell: Cell<RegType>, atom: ClauseName, spec: Specifier,
-                       priority: usize)
+    fn promote_atom_op(&mut self, atom: ClauseName, spec: Specifier, priority: usize)
                        -> TokenType
     {
         let op_decl = if is_infix!(spec) {
@@ -258,14 +257,14 @@ impl<R: Read> Parser<R> {
             None
         };
 
-        self.terms.push(Term::Constant(cell, Constant::Atom(atom, op_decl)));
+        self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, op_decl)));
         TokenType::Term
     }
 
     fn shift(&mut self, token: Token, priority: usize, spec: Specifier) {
         let tt = match token {
             Token::Constant(Constant::Atom(atom, _)) =>
-                self.promote_atom_op(Cell::default(), atom, spec, priority),
+                self.promote_atom_op(atom, spec, priority),
             Token::Constant(c) => {
                 self.terms.push(Term::Constant(Cell::default(), c));
                 TokenType::Term
@@ -301,17 +300,17 @@ impl<R: Read> Parser<R> {
                     if let Some(desc3) = self.stack.pop() {
                         if is_xfx!(desc2.spec) && affirm_xfx(priority, desc2, desc3, desc1)
                         {
-                            self.push_binary_op(desc2, LTERM);
+                            self.push_binary_op(desc2, LTERM, XFX);
                             continue;
                         }
                         else if is_yfx!(desc2.spec) && affirm_yfx(priority, desc2, desc3, desc1)
                         {
-                            self.push_binary_op(desc2, LTERM);
+                            self.push_binary_op(desc2, LTERM, YFX);
                             continue;
                         }
                         else if is_xfy!(desc2.spec) && affirm_xfy(priority, desc2, desc3, desc1)
                         {
-                            self.push_binary_op(desc2, TERM);
+                            self.push_binary_op(desc2, TERM, XFY);
                             continue;
                         } else {
                             self.stack.push(desc3);
@@ -319,16 +318,16 @@ impl<R: Read> Parser<R> {
                     }
 
                     if is_yf!(desc1.spec) && affirm_yf(desc1, desc2) {
-                        self.push_unary_op(desc1, LTERM, Fixity::Post);
+                        self.push_unary_op(desc1, LTERM, YF);
                         continue;
                     } else if is_xf!(desc1.spec) && affirm_xf(desc1, desc2) {
-                        self.push_unary_op(desc1, LTERM, Fixity::Post);
+                        self.push_unary_op(desc1, LTERM, XF);
                         continue;
                     } else if is_fy!(desc2.spec) && affirm_fy(priority, desc1, desc2) {
-                        self.push_unary_op(desc2, TERM, Fixity::Pre);
+                        self.push_unary_op(desc2, TERM, FY);
                         continue;
                     } else if is_fx!(desc2.spec) && affirm_fx(priority, desc1, desc2) {
-                        self.push_unary_op(desc2, TERM, Fixity::Pre);
+                        self.push_unary_op(desc2, TERM, FX);
                         continue;
                     } else {
                         self.stack.push(desc2);
@@ -692,7 +691,7 @@ impl<R: Read> Parser<R> {
                     return Err(ParserError::IncompleteReduction);
                 },
             Token::HeadTailSeparator => {
-                self.reduce_op(1000); // see rterm.c:495, SWI Prolog docs.
+                self.reduce_op(1000);
                 self.shift(Token::HeadTailSeparator, 1000, DELIMITER);
             },
             Token::Comma => {

@@ -139,10 +139,16 @@ impl<R: Read> Parser<R> {
     }
 
     #[inline]
+    pub fn get_atom_tbl(&self) -> TabledData<Atom> {
+        self.lexer.atom_tbl.clone()
+    }
+    
+    #[inline]
     pub fn set_atom_tbl(&mut self, atom_tbl: TabledData<Atom>) {
         self.lexer.atom_tbl = atom_tbl;
     }
 
+    #[inline]
     pub fn add_to_top(&mut self, head: &str) {
         self.lexer.reader.extend(head.as_bytes().iter().map(|&b| Ok(b)));
     }

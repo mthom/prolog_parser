@@ -617,6 +617,13 @@ impl ClauseName {
     }
 }
 
+impl AsRef<str> for ClauseName {
+    #[inline]
+    fn as_ref(self: &Self) -> &str {
+        self.as_str()
+    }
+}
+
 #[inline]
 fn binary_pow<T>(mut n: T, mut power: BigUint) -> T
     where T: Clone + Mul + One,

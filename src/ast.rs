@@ -134,7 +134,7 @@ macro_rules! prefix {
     ($x:expr) => ($x & (FX | FY))
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RegType {
     Perm(usize),
     Temp(usize)
@@ -312,7 +312,7 @@ pub enum ParserError {
     NonPrologChar,
     ParseBigInt,
     ParseFloat,
-    Utf8Conversion(Utf8Error)
+    Utf8Error
 }
 
 impl ParserError {
@@ -360,7 +360,7 @@ impl ParserError {
                 "cannot_parse_big_int",
             &ParserError::ParseFloat =>
                 "cannot_parse_float",
-            &ParserError::Utf8Conversion(_) =>
+            &ParserError::Utf8Error =>
                 "utf8_conversion_error",
             &ParserError::CannotParseCyclicTerm =>
                 "cannot_parse_cyclic_term"
@@ -381,8 +381,8 @@ impl From<IOError> for ParserError {
 }
 
 impl From<Utf8Error> for ParserError {
-    fn from(err: Utf8Error) -> ParserError {
-        ParserError::Utf8Conversion(err)
+    fn from(_: Utf8Error) -> ParserError {
+        ParserError::Utf8Error
     }
 }
 

@@ -142,7 +142,7 @@ impl<R: Read> Parser<R> {
     pub fn get_atom_tbl(&self) -> TabledData<Atom> {
         self.lexer.atom_tbl.clone()
     }
-    
+
     #[inline]
     pub fn set_atom_tbl(&mut self, atom_tbl: TabledData<Atom>) {
         self.lexer.atom_tbl = atom_tbl;
@@ -195,21 +195,6 @@ impl<R: Read> Parser<R> {
             if let Some(mut name) = self.terms.pop() {
                 if is_postfix!(assoc) {
                     swap(&mut arg1, &mut name);
-                } else if is_prefix!(assoc) {
-                    // reduce negation of numbers from structures to numbers.
-                    match &name {
-                        &Term::Clause(_, ref name, ..)
-                      | &Term::Constant(_, Constant::Atom(ref name, _)) if name.as_str() == "-" =>
-                          if let Term::Constant(r, Constant::Number(n)) = arg1 {
-                              self.terms.push(Term::Constant(r, Constant::Number(-n)));
-                              self.stack.push(TokenDesc { tt: TokenType::Term,
-                                                          priority: 0,
-                                                          spec });
-
-                              return;
-                          },
-                        _ => {}
-                    };
                 }
 
                 if let Term::Constant(_, Constant::Atom(name, _)) = name {
@@ -669,6 +654,25 @@ impl<R: Read> Parser<R> {
 
     fn shift_token(&mut self, token: Token, op_dir: CompositeOp) -> Result<(), ParserError> {
         match token {
+            Token::Constant(Constant::Number(n)) => {
+                if let Some(desc) = self.stack.pop() {
+                    if let Some(term) = self.terms.pop() {
+                        match term {
+                            Term::Constant(_, Constant::Atom(ref name, _))
+                                if name.as_str() == "-" && is_prefix!(desc.spec) => {
+                                    self.shift(Token::Constant(Constant::Number(-n)), 0, TERM);
+                                    return Ok(());
+                                },
+                            _ => {
+                                self.terms.push(term);
+                                self.stack.push(desc);
+                            }
+                        }
+                    }
+                }
+
+                self.shift(Token::Constant(Constant::Number(n)), 0, TERM);                        
+            },
             Token::Constant(c) =>
                 if let Some(name) = self.atomize_constant(&c) {
                     if !self.shift_op(name, op_dir)? {
@@ -712,7 +716,7 @@ impl<R: Read> Parser<R> {
                   | Some(TokenType::OpenCurly)
                   | Some(TokenType::HeadTailSeparator)
                   | Some(TokenType::Comma)
-                        => return Err(ParserError::IncompleteReduction),
+                      => return Err(ParserError::IncompleteReduction),
                     _ => {}
                 }
         }

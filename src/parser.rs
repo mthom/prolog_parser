@@ -210,6 +210,32 @@ impl<R: Read> Parser<R> {
         }
     }
 
+    fn get_clause_spec(&self, name: ClauseName, arity: usize, op_dir: CompositeOp)
+                       -> Option<(usize, Specifier)>
+    {
+        match arity {
+            1 => {
+                /* This is a clause with an operator principal functor. Prefix operators
+                are supposed over post.
+                 */
+                if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Pre) {
+                    return Some((pri, spec));
+                }
+
+                if let Some((spec, pri, _)) = op_dir.get(name, Fixity::Post) {
+                    return Some((pri, spec));
+                }
+            },
+            2 =>
+                if let Some((spec, pri, _)) = op_dir.get(name, Fixity::In) {
+                    return Some((pri, spec));
+                },
+            _ => {}
+        };
+
+        None
+    }
+    
     fn get_desc(&self, name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc> {
         let mut op_desc = OpDesc { pre: 0, inf: 0, post: 0, spec: 0 };
 
@@ -238,11 +264,7 @@ impl<R: Read> Parser<R> {
     fn promote_atom_op(&mut self, atom: ClauseName, spec: Specifier, priority: usize)
                        -> TokenType
     {
-        let op_decl = if is_infix!(spec) {
-            Some((priority, spec))
-        } else if is_prefix!(spec) {
-            Some((priority, spec))
-        } else if is_postfix!(spec) {
+        let op_decl = if is_infix!(spec) || is_prefix!(spec) || is_postfix!(spec) {
             Some((priority, spec))
         } else {
             None
@@ -360,9 +382,9 @@ impl<R: Read> Parser<R> {
         }
 
         None
-    }
-
-    fn reduce_term(&mut self) -> bool
+    }  
+    
+    fn reduce_term(&mut self, op_dir: CompositeOp) -> bool
     {
         if self.stack.is_empty() {
             return false;
@@ -405,8 +427,9 @@ impl<R: Read> Parser<R> {
                         let head = subterms.pop().unwrap();
 
                         self.terms.push(Term::Cons(Cell::default(), head, tail));
-                    } else {                        
-                        self.terms.push(Term::Clause(Cell::default(), name, subterms, None));
+                    } else {
+                        let spec = self.get_clause_spec(name.clone(), subterms.len(), op_dir);
+                        self.terms.push(Term::Clause(Cell::default(), name, subterms, spec));
                     }
 
                     if let Some(&mut TokenDesc { ref mut priority, ref mut spec,
@@ -671,11 +694,11 @@ impl<R: Read> Parser<R> {
                     }
                 }
 
-                self.shift(Token::Constant(Constant::Number(n)), 0, TERM);                        
+                self.shift(Token::Constant(Constant::Number(n)), 0, TERM);
             },
             Token::Constant(c) =>
                 if let Some(name) = self.atomize_constant(&c) {
-                    if !self.shift_op(name, op_dir)? {
+                    if !self.shift_op(name, op_dir)? {                        
                         self.shift(Token::Constant(c), 0, TERM);
                     }
                 } else {
@@ -685,7 +708,7 @@ impl<R: Read> Parser<R> {
             Token::Open   => self.shift(Token::Open, 1300, DELIMITER),
             Token::OpenCT => self.shift(Token::OpenCT, 1300, DELIMITER),
             Token::Close  =>
-                if !self.reduce_term() {
+                if !self.reduce_term(op_dir) {
                     if !self.reduce_brackets() {
                         return Err(ParserError::IncompleteReduction);
                     }

@@ -40,6 +40,32 @@ struct TokenDesc {
     spec: u32
 }
 
+pub
+fn get_clause_spec(name: ClauseName, arity: usize, op_dir: CompositeOp) -> Option<(usize, Specifier)>
+{
+    match arity {
+        1 => {
+            /* This is a clause with an operator principal functor. Prefix operators
+            are supposed over post.
+             */
+            if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Pre) {
+                return Some((pri, spec));
+            }
+
+            if let Some((spec, pri, _)) = op_dir.get(name, Fixity::Post) {
+                return Some((pri, spec));
+            }
+        },
+        2 =>
+            if let Some((spec, pri, _)) = op_dir.get(name, Fixity::In) {
+                return Some((pri, spec));
+            },
+        _ => {}
+    };
+
+    None
+}
+
 fn affirm_xfx(priority: usize, d2: TokenDesc, d3: TokenDesc, d1: TokenDesc) -> bool
 {
     d2.priority <= priority
@@ -208,33 +234,7 @@ impl<R: Read> Parser<R> {
                 }
             }
         }
-    }
-
-    fn get_clause_spec(&self, name: ClauseName, arity: usize, op_dir: CompositeOp)
-                       -> Option<(usize, Specifier)>
-    {
-        match arity {
-            1 => {
-                /* This is a clause with an operator principal functor. Prefix operators
-                are supposed over post.
-                 */
-                if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Pre) {
-                    return Some((pri, spec));
-                }
-
-                if let Some((spec, pri, _)) = op_dir.get(name, Fixity::Post) {
-                    return Some((pri, spec));
-                }
-            },
-            2 =>
-                if let Some((spec, pri, _)) = op_dir.get(name, Fixity::In) {
-                    return Some((pri, spec));
-                },
-            _ => {}
-        };
-
-        None
-    }
+    }    
     
     fn get_desc(&self, name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc> {
         let mut op_desc = OpDesc { pre: 0, inf: 0, post: 0, spec: 0 };
@@ -428,7 +428,7 @@ impl<R: Read> Parser<R> {
 
                         self.terms.push(Term::Cons(Cell::default(), head, tail));
                     } else {
-                        let spec = self.get_clause_spec(name.clone(), subterms.len(), op_dir);
+                        let spec = get_clause_spec(name.clone(), subterms.len(), op_dir);
                         self.terms.push(Term::Clause(Cell::default(), name, subterms, spec));
                     }
 

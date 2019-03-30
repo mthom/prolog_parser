@@ -764,6 +764,15 @@ impl Number {
     }
 
     #[inline]
+    pub fn is_positive(&self) -> bool {
+        match self {
+            &Number::Float(fl)       => fl.into_inner().is_sign_positive(),
+            &Number::Integer(ref bi) => bi.is_positive(),
+            &Number::Rational(ref r) => r.is_positive()
+        }        
+    }
+
+    #[inline]
     pub fn abs(&self) -> Self {
         match self {
             &Number::Float(ref fl)   => Number::Float(OrderedFloat(fl.into_inner().abs())),

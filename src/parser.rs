@@ -405,7 +405,7 @@ impl<R: Read> Parser<R> {
                         let head = subterms.pop().unwrap();
 
                         self.terms.push(Term::Cons(Cell::default(), head, tail));
-                    } else {
+                    } else {                        
                         self.terms.push(Term::Clause(Cell::default(), name, subterms, None));
                     }
 

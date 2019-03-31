@@ -142,27 +142,27 @@ fn affirm_fx(priority: usize, d1: TokenDesc, d2: TokenDesc) -> bool
     d2.priority <= priority && is_term!(d1.spec) && d1.priority < d2.priority
 }
 
-fn sep_to_atom(tt: TokenType) -> Option<ClauseName>
+fn sep_to_atom(tt: TokenType) -> Option<(ClauseName, Option<(usize, Specifier)>)>
 {
     match tt {
         TokenType::Open | TokenType::OpenCT =>
-            Some(clause_name!("(")),
+            Some((clause_name!("("), None)),
         TokenType::Close =>
-            Some(clause_name!(")")),
+            Some((clause_name!(")"), None)),
         TokenType::OpenList =>
-            Some(clause_name!("[")),
+            Some((clause_name!("["), None)),
         TokenType::CloseList =>
-            Some(clause_name!("]")),
+            Some((clause_name!("]"), None)),
         TokenType::OpenCurly =>
-            Some(clause_name!("{")),
+            Some((clause_name!("{"), None)),
         TokenType::CloseCurly =>
-            Some(clause_name!("}")),
+            Some((clause_name!("}"), None)),
         TokenType::HeadTailSeparator =>
-            Some(clause_name!("|")),
+            Some((clause_name!("|"), None)),
         TokenType::Comma =>
-            Some(clause_name!(",")),
+            Some((clause_name!(","), Some((1000, XFY)))),
         TokenType::End =>
-            Some(clause_name!(".")),
+            Some((clause_name!("."), None)),
         _ => None
     }
 }
@@ -565,8 +565,8 @@ impl<R: Read> Parser<R> {
                         oc.priority = 0;
                         oc.spec = TERM;
 
-                        if let Some(atom) = sep_to_atom(td.tt) {
-                            let term = Term::Constant(Cell::default(), Constant::Atom(atom, None));
+                        if let Some((atom, spec)) = sep_to_atom(td.tt) {
+                            let term = Term::Constant(Cell::default(), Constant::Atom(atom, spec));
                             self.terms.push(Term::Clause(Cell::default(), clause_name!("{}"),
                                                          vec![Box::new(term)], None));
                         } else {
@@ -603,8 +603,8 @@ impl<R: Read> Parser<R> {
 
         match self.stack.remove(idx).tt {
             TokenType::Open | TokenType::OpenCT => {
-                if let Some(atom) = sep_to_atom(self.stack[idx].tt) {
-                    self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, None)));
+                if let Some((atom, spec)) = sep_to_atom(self.stack[idx].tt) {
+                    self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, spec)));
                 }
 
                 self.stack[idx].spec = TERM;

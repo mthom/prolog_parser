@@ -66,6 +66,31 @@ fn get_clause_spec(name: ClauseName, arity: usize, op_dir: CompositeOp) -> Optio
     None
 }
 
+pub fn get_desc(name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc> {
+    let mut op_desc = OpDesc { pre: 0, inf: 0, post: 0, spec: 0 };
+
+    if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Pre) {
+        op_desc.pre = pri;
+        op_desc.spec |= spec;
+    }
+
+    if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Post) {
+        op_desc.post = pri;
+        op_desc.spec |= spec;
+    }
+
+    if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::In) {
+        op_desc.inf = pri;
+        op_desc.spec |= spec;
+    }
+
+    if op_desc.pre == 0 && op_desc.post == 0 && op_desc.inf == 0 {
+        None
+    } else {
+        Some(op_desc)
+    }
+}
+
 fn affirm_xfx(priority: usize, d2: TokenDesc, d3: TokenDesc, d1: TokenDesc) -> bool
 {
     d2.priority <= priority
@@ -143,11 +168,11 @@ fn sep_to_atom(tt: TokenType) -> Option<ClauseName>
 }
 
 #[derive(Clone, Copy)]
-struct OpDesc {
-    pre: usize,
-    inf: usize,
-    post: usize,
-    spec: Specifier
+pub struct OpDesc {
+    pub pre: usize,
+    pub inf: usize,
+    pub post: usize,
+    pub spec: Specifier
 }
 
 pub struct Parser<R> where R: Read {
@@ -236,31 +261,6 @@ impl<R: Read> Parser<R> {
         }
     }    
     
-    fn get_desc(&self, name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc> {
-        let mut op_desc = OpDesc { pre: 0, inf: 0, post: 0, spec: 0 };
-
-        if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Pre) {
-            op_desc.pre = pri;
-            op_desc.spec |= spec;
-        }
-
-        if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Post) {
-            op_desc.post = pri;
-            op_desc.spec |= spec;
-        }
-
-        if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::In) {
-            op_desc.inf = pri;
-            op_desc.spec |= spec;
-        }
-
-        if op_desc.pre == 0 && op_desc.post == 0 && op_desc.inf == 0 {
-            None
-        } else {
-            Some(op_desc)
-        }
-    }
-
     fn promote_atom_op(&mut self, atom: ClauseName, spec: Specifier, priority: usize)
                        -> TokenType
     {
@@ -617,7 +617,7 @@ impl<R: Read> Parser<R> {
     }
 
     fn shift_op(&mut self, name: ClauseName, op_dir: CompositeOp) -> Result<bool, ParserError> {
-        if let Some(OpDesc { pre, inf, post, spec }) = self.get_desc(name.clone(), op_dir) {
+        if let Some(OpDesc { pre, inf, post, spec }) = get_desc(name.clone(), op_dir) {
             if pre > 0 && inf + post > 0 {
                 match try!(self.lexer.lookahead_char()) {
                     '(' => {

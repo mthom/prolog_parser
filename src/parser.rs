@@ -555,29 +555,27 @@ impl<R: Read> Parser<R> {
             }
         }
 
-        self.reduce_op(1300);
+        self.reduce_op(1201);
 
         if self.stack.len() > 1 {
             if let Some(td) = self.stack.pop() {
                 if let Some(ref mut oc) = self.stack.last_mut() {
+                    if td.tt != TokenType::Term {
+                        return Ok(false);
+                    }
+                    
                     if oc.tt == TokenType::OpenCurly {
                         oc.tt = TokenType::Term;
                         oc.priority = 0;
                         oc.spec = TERM;
 
-                        if let Some((atom, spec)) = sep_to_atom(td.tt) {
-                            let term = Term::Constant(Cell::default(), Constant::Atom(atom, spec));
-                            self.terms.push(Term::Clause(Cell::default(), clause_name!("{}"),
-                                                         vec![Box::new(term)], None));
-                        } else {
-                            let term = match self.terms.pop() {
-                                Some(term) => term,
-                                _ => return Err(ParserError::IncompleteReduction)
-                            };
+                        let term = match self.terms.pop() {
+                            Some(term) => term,
+                            _ => return Err(ParserError::IncompleteReduction)
+                        };
 
-                            self.terms.push(Term::Clause(Cell::default(), clause_name!("{}"),
-                                                         vec![Box::new(term)], None));
-                        }
+                        self.terms.push(Term::Clause(Cell::default(), clause_name!("{}"),
+                                                     vec![Box::new(term)], None));
 
                         return Ok(true);
                     }
@@ -593,7 +591,7 @@ impl<R: Read> Parser<R> {
             return false;
         }
 
-        self.reduce_op(1300);
+        self.reduce_op(1201);
 
         if self.stack.len() == 1 {
             return false;
@@ -670,6 +668,8 @@ impl<R: Read> Parser<R> {
         match c {
             &Constant::Atom(ref name, _) => Some(name.clone()),
             &Constant::Char(c) =>
+                Some(clause_name!(c.to_string(), self.lexer.atom_tbl)),
+            &Constant::EmptyList =>
                 Some(clause_name!(c.to_string(), self.lexer.atom_tbl)),
             _ => None
         }

@@ -98,9 +98,9 @@ impl<R: Read> Lexer<R> {
         if self.reader.peek().is_none() {
             return Ok(true);
         }
-        
+
         let mut c = is_not_eof!(self.lookahead_char());
-        
+
         while layout_char!(c) {
             self.skip_char()?;
 
@@ -545,6 +545,11 @@ impl<R: Read> Lexer<R> {
         } else if single_quote_char!(c) {
             self.skip_char()?;
 
+            if '\'' == self.lookahead_char()? {
+                self.skip_char()?;
+                return Ok(Token::Constant(Constant::Atom(clause_name!("''"), None)));
+            }
+
             consume_chars_with!(token, self.get_single_quoted_item());
 
             if single_quote_char!(self.lookahead_char()?) {
@@ -564,7 +569,7 @@ impl<R: Read> Lexer<R> {
 
         Ok(Token::Constant(atom!(token, self.atom_tbl)))
     }
-    
+
     fn number_token(&mut self) -> Result<Token, ParserError> {
         let mut token = String::new();
 
@@ -638,6 +643,12 @@ impl<R: Read> Lexer<R> {
                     self.skip_char()?;
                     self.get_single_quoted_char()
                         .map(|c| Token::Constant(Constant::CharCode(c as u8)))
+                        .or_else(|_| {
+                            self.return_char(c);                            
+                            let n = BigInt::parse_bytes(token.as_bytes(), 10)
+                                .ok_or(ParserError::ParseBigInt)?;
+                            Ok(Token::Constant(integer!(n)))
+                        })
                 } else {
                     let n = BigInt::parse_bytes(token.as_bytes(), 10)
                         .ok_or(ParserError::ParseBigInt)?;
@@ -711,7 +722,7 @@ impl<R: Read> Lexer<R> {
 
                 if c == '.' {
                     self.skip_char()?;
-                    
+
                     match self.lookahead_char() {
                         Ok(c) if layout_char!(c) || c == '%' => {
                             if new_line_char!(c) {
@@ -725,7 +736,7 @@ impl<R: Read> Lexer<R> {
                         _ => self.return_char('.')
                     };
                 }
-                
+
                 if decimal_digit_char!(c) {
                     return self.number_token();
                 }

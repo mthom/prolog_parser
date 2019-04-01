@@ -564,7 +564,7 @@ impl<R: Read> Lexer<R> {
 
         Ok(Token::Constant(atom!(token, self.atom_tbl)))
     }
-
+    
     fn number_token(&mut self) -> Result<Token, ParserError> {
         let mut token = String::new();
 
@@ -637,7 +637,7 @@ impl<R: Read> Lexer<R> {
                 } else if single_quote_char!(c) {
                     self.skip_char()?;
                     self.get_single_quoted_char()
-                        .map(|c| Token::Constant(Constant::Char(c)))
+                        .map(|c| Token::Constant(Constant::CharCode(c as u8)))
                 } else {
                     let n = BigInt::parse_bytes(token.as_bytes(), 10)
                         .ok_or(ParserError::ParseBigInt)?;

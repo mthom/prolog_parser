@@ -249,12 +249,20 @@ impl Default for MachineFlags {
 
 #[derive(Clone, Copy)]
 pub enum DoubleQuotes {
-    Atom, Chars, // Codes
+    Atom, Chars, Codes
 }
 
 impl DoubleQuotes {
     pub fn is_chars(self) -> bool {
         if let DoubleQuotes::Chars = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_atom(self) -> bool {
+        if let DoubleQuotes::Atom = self {
             true
         } else {
             false
@@ -395,6 +403,7 @@ pub enum Fixity {
 #[derive(Clone, Hash)]
 pub enum Constant {
     Atom(ClauseName, Option<(usize, Specifier)>),
+    CharCode(u8),
     Char(char),
     Number(Number),
     String(StringList),
@@ -413,6 +422,8 @@ impl fmt::Display for Constant {
                 },
             &Constant::Char(c) =>
                 write!(f, "'{}'", c as u8),
+            &Constant::CharCode(c) =>
+                write!(f, "{}", c),
             &Constant::EmptyList =>
                 write!(f, "[]"),
             &Constant::Number(ref n) =>
@@ -437,6 +448,14 @@ impl PartialEq for Constant {
                 a1.as_str() == a2.as_str(),
             (&Constant::Char(c1), &Constant::Char(c2)) =>
                 c1 == c2,
+            (&Constant::CharCode(c1), &Constant::CharCode(c2)) =>
+                c1 == c2,
+            (&Constant::CharCode(c1), &Constant::Number(Number::Integer(ref c2)))
+          | (&Constant::Number(Number::Integer(ref c2)), &Constant::CharCode(c1)) =>
+              match c2.to_u8() {
+                  Some(c2) => c1 == c2,
+                  None => false
+              },
             (&Constant::Number(ref n1), &Constant::Number(ref n2)) =>
                 n1 == n2,
             (&Constant::String(ref s1), &Constant::String(ref s2)) =>
@@ -592,7 +611,7 @@ impl ClauseName {
             }
         }
     }
-    
+
     pub fn as_str(&self) -> &str {
         match self {
             &ClauseName::BuiltIn(s) => s,
@@ -770,7 +789,7 @@ impl Number {
             &Number::Float(fl)       => fl.into_inner().is_sign_positive(),
             &Number::Integer(ref bi) => bi.is_positive(),
             &Number::Rational(ref r) => r.is_positive()
-        }        
+        }
     }
 
     #[inline]

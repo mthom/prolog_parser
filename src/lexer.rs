@@ -570,6 +570,14 @@ impl<R: Read> Lexer<R> {
         Ok(Token::Constant(atom!(token, self.atom_tbl)))
     }
 
+    fn vacate_with_float(&mut self, mut token: String) -> Result<Token, ParserError> {
+        self.return_char(token.pop().unwrap());
+                            
+        token.parse::<f64>().map(|s| {
+            Token::Constant(Constant::Number(Number::Float(OrderedFloat(s))))
+        }).or(Err(ParserError::ParseFloat))
+    }
+    
     fn number_token(&mut self) -> Result<Token, ParserError> {
         let mut token = String::new();
 
@@ -603,6 +611,15 @@ impl<R: Read> Lexer<R> {
 
                 if exponent_char!(self.lookahead_char()?) {
                     token.push(self.skip_char()?);
+
+                    let c = match self.lookahead_char() {
+                        Err(_) => return self.vacate_with_float(token),
+                        Ok(c) => c
+                    };
+
+                    if !sign_char!(c) && !decimal_digit_char!(c) {
+                        return self.vacate_with_float(token);
+                    }                   
 
                     if sign_char!(self.lookahead_char()?) {
                         token.push(self.skip_char()?);

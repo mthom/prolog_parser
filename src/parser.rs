@@ -259,8 +259,8 @@ impl<R: Read> Parser<R> {
                 }
             }
         }
-    }    
-    
+    }
+
     fn promote_atom_op(&mut self, atom: ClauseName, spec: Specifier, priority: usize)
                        -> TokenType
     {
@@ -382,8 +382,8 @@ impl<R: Read> Parser<R> {
         }
 
         None
-    }  
-    
+    }
+
     fn reduce_term(&mut self, op_dir: CompositeOp) -> bool
     {
         if self.stack.is_empty() {
@@ -563,7 +563,7 @@ impl<R: Read> Parser<R> {
                     if td.tt != TokenType::Term {
                         return Ok(false);
                     }
-                    
+
                     if oc.tt == TokenType::OpenCurly {
                         oc.tt = TokenType::Term;
                         oc.priority = 0;
@@ -626,10 +626,9 @@ impl<R: Read> Parser<R> {
                                    inf + post,
                                    spec & (XFX | XFY | YFX | YF | XF));
                     },
-                    _ =>
-                        if let Some(&TokenDesc { spec: pspec, .. }) = self.stack.last() {
-                            self.reduce_op(inf + post);
-
+                    _ => {
+                        self.reduce_op(inf + post);
+                        if let Some(TokenDesc { spec: pspec, .. }) = self.stack.last().cloned() {
                             // rterm.c: 412
                             if is_term!(pspec) {
                                 self.shift(Token::Constant(Constant::Atom(name, None)),
@@ -645,6 +644,7 @@ impl<R: Read> Parser<R> {
                                        pre,
                                        spec & (FX | FY));
                         }
+                    }
                 }
             } else {
                 self.reduce_op(pre + inf + post); // only one non-zero priority among these.
@@ -698,7 +698,7 @@ impl<R: Read> Parser<R> {
             },
             Token::Constant(c) =>
                 if let Some(name) = self.atomize_constant(&c) {
-                    if !self.shift_op(name, op_dir)? {                        
+                    if !self.shift_op(name, op_dir)? {
                         self.shift(Token::Constant(c), 0, TERM);
                     }
                 } else {

@@ -572,18 +572,18 @@ impl<R: Read> Lexer<R> {
 
     fn vacate_with_float(&mut self, mut token: String) -> Result<Token, ParserError> {
         self.return_char(token.pop().unwrap());
-                            
+
         token.parse::<f64>().map(|s| {
             Token::Constant(Constant::Number(Number::Float(OrderedFloat(s))))
         }).or(Err(ParserError::ParseFloat))
     }
-    
+
     fn number_token(&mut self) -> Result<Token, ParserError> {
         let mut token = String::new();
 
         token.push(self.skip_char()?);
         let mut c = self.lookahead_char()?;
-
+        
         while decimal_digit_char!(c) {
             token.push(c);
             self.skip_char()?;
@@ -619,10 +619,23 @@ impl<R: Read> Lexer<R> {
 
                     if !sign_char!(c) && !decimal_digit_char!(c) {
                         return self.vacate_with_float(token);
-                    }                   
+                    }
 
-                    if sign_char!(self.lookahead_char()?) {
+                    if sign_char!(c) {
                         token.push(self.skip_char()?);
+
+                        let c = match self.lookahead_char() {
+                            Err(_) => {
+                                self.return_char(token.pop().unwrap());
+                                return self.vacate_with_float(token);
+                            },
+                            Ok(c) => c
+                        };
+
+                        if !decimal_digit_char!(c) {
+                            self.return_char(token.pop().unwrap());
+                            return self.vacate_with_float(token);
+                        }
                     }
 
                     if decimal_digit_char!(self.lookahead_char()?) {
@@ -636,7 +649,7 @@ impl<R: Read> Lexer<R> {
                             Token::Constant(Constant::Number(Number::Float(OrderedFloat(s))))
                         }).or(Err(ParserError::ParseFloat))
                     } else {
-                        Err(ParserError::ParseFloat)
+                        return self.vacate_with_float(token);
                     }
                 } else {
                     token.parse::<f64>().map(|s| {
@@ -661,7 +674,7 @@ impl<R: Read> Lexer<R> {
                     self.get_single_quoted_char()
                         .map(|c| Token::Constant(Constant::CharCode(c as u8)))
                         .or_else(|_| {
-                            self.return_char(c);                            
+                            self.return_char(c);
                             let n = BigInt::parse_bytes(token.as_bytes(), 10)
                                 .ok_or(ParserError::ParseBigInt)?;
                             Ok(Token::Constant(integer!(n)))

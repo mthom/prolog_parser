@@ -84,6 +84,11 @@ pub fn get_desc(name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc> {
         op_desc.spec |= spec;
     }
 
+    if op_desc.pre == 0 && name.as_str() == "-" {
+        op_desc.pre = 200;
+        op_desc.spec |= FY;
+    }
+    
     if op_desc.pre == 0 && op_desc.post == 0 && op_desc.inf == 0 {
         None
     } else {
@@ -261,8 +266,7 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn promote_atom_op(&mut self, atom: ClauseName, spec: Specifier, priority: usize)
-                       -> TokenType
+    fn promote_atom_op(&mut self, atom: ClauseName, spec: Specifier, priority: usize) -> TokenType
     {
         let op_decl = if is_infix!(spec) || is_prefix!(spec) || is_postfix!(spec) {
             Some((priority, spec))
@@ -715,12 +719,12 @@ impl<R: Read> Parser<R> {
                 },
             Token::OpenList  => self.shift(Token::OpenList, 1300, DELIMITER),
             Token::CloseList =>
-                if !try!(self.reduce_list()) {
+                if !self.reduce_list()? {
                     return Err(ParserError::IncompleteReduction);
                 },
             Token::OpenCurly => self.shift(Token::OpenCurly, 1300, DELIMITER),
             Token::CloseCurly =>
-                if !try!(self.reduce_curly()) {
+                if !self.reduce_curly()? {
                     return Err(ParserError::IncompleteReduction);
                 },
             Token::HeadTailSeparator => {

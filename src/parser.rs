@@ -84,8 +84,7 @@ pub fn get_desc(name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc> {
         op_desc.spec |= spec;
     }
 
-    if op_desc.pre == 0 && name.as_str() == "-" {
-        op_desc.pre = 200;
+    if name.as_str() == "-" {
         op_desc.spec |= FY;
     }
     

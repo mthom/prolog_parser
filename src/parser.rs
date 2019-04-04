@@ -41,24 +41,24 @@ struct TokenDesc {
 }
 
 pub
-fn get_clause_spec(name: ClauseName, arity: usize, op_dir: CompositeOp) -> Option<(usize, Specifier)>
+fn get_clause_spec(name: ClauseName, arity: usize, op_dir: CompositeOp) -> Option<SharedOpDesc>
 {
     match arity {
         1 => {
             /* This is a clause with an operator principal functor. Prefix operators
             are supposed over post.
              */
-            if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Pre) {
-                return Some((pri, spec));
+            if let Some(OpDirValue(cell, _)) = op_dir.get(name.clone(), Fixity::Pre) {
+                return Some(cell);
             }
 
-            if let Some((spec, pri, _)) = op_dir.get(name, Fixity::Post) {
-                return Some((pri, spec));
+            if let Some(OpDirValue(cell, _)) = op_dir.get(name, Fixity::Post) {
+                return Some(cell);
             }
         },
         2 =>
-            if let Some((spec, pri, _)) = op_dir.get(name, Fixity::In) {
-                return Some((pri, spec));
+            if let Some(OpDirValue(cell, _)) = op_dir.get(name, Fixity::In) {
+                return Some(cell);
             },
         _ => {}
     };
@@ -66,28 +66,31 @@ fn get_clause_spec(name: ClauseName, arity: usize, op_dir: CompositeOp) -> Optio
     None
 }
 
-pub fn get_desc(name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc> {
+pub fn get_desc(name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc>
+{
     let mut op_desc = OpDesc { pre: 0, inf: 0, post: 0, spec: 0 };
 
-    if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Pre) {
+    if let Some(OpDirValue(cell, _)) = op_dir.get(name.clone(), Fixity::Pre) {
+        let (pri, spec) = cell.get();
+
         op_desc.pre = pri;
         op_desc.spec |= spec;
     }
 
-    if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::Post) {
+    if let Some(OpDirValue(cell, _)) = op_dir.get(name.clone(), Fixity::Post) {
+        let (pri, spec) = cell.get();
+
         op_desc.post = pri;
         op_desc.spec |= spec;
     }
 
-    if let Some((spec, pri, _)) = op_dir.get(name.clone(), Fixity::In) {
+    if let Some(OpDirValue(cell, _)) = op_dir.get(name.clone(), Fixity::In) {
+        let (pri, spec) = cell.get();
+
         op_desc.inf = pri;
         op_desc.spec |= spec;
     }
 
-    if name.as_str() == "-" {
-        op_desc.spec |= FY;
-    }
-    
     if op_desc.pre == 0 && op_desc.post == 0 && op_desc.inf == 0 {
         None
     } else {
@@ -146,27 +149,27 @@ fn affirm_fx(priority: usize, d1: TokenDesc, d2: TokenDesc) -> bool
     d2.priority <= priority && is_term!(d1.spec) && d1.priority < d2.priority
 }
 
-fn sep_to_atom(tt: TokenType) -> Option<(ClauseName, Option<(usize, Specifier)>)>
+fn sep_to_atom(tt: TokenType) -> Option<ClauseName>
 {
     match tt {
         TokenType::Open | TokenType::OpenCT =>
-            Some((clause_name!("("), None)),
+            Some(clause_name!("(")),
         TokenType::Close =>
-            Some((clause_name!(")"), None)),
+            Some(clause_name!(")")),
         TokenType::OpenList =>
-            Some((clause_name!("["), None)),
+            Some(clause_name!("[")),
         TokenType::CloseList =>
-            Some((clause_name!("]"), None)),
+            Some(clause_name!("]")),
         TokenType::OpenCurly =>
-            Some((clause_name!("{"), None)),
+            Some(clause_name!("{")),
         TokenType::CloseCurly =>
-            Some((clause_name!("}"), None)),
+            Some(clause_name!("}")),
         TokenType::HeadTailSeparator =>
-            Some((clause_name!("|"), None)),
+            Some(clause_name!("|")),
         TokenType::Comma =>
-            Some((clause_name!(","), Some((1000, XFY)))),
+            Some(clause_name!(",")),
         TokenType::End =>
-            Some((clause_name!("."), None)),
+            Some(clause_name!(".")),
         _ => None
     }
 }
@@ -208,13 +211,13 @@ impl<R: Read> Parser<R> {
         self.lexer.reader.extend(head.as_bytes().iter().map(|&b| Ok(b)));
     }
 
-    fn get_term_name(&mut self, tt: TokenType) -> Option<ClauseName> {
+    fn get_term_name(&mut self, tt: TokenType) -> Option<(ClauseName, Option<SharedOpDesc>)> {
         match tt {
-            TokenType::Comma => Some(clause_name!(",")),
+            TokenType::Comma => Some((clause_name!(","), Some(SharedOpDesc::new(1000, XFY)))),
             TokenType::Term =>
                 match self.terms.pop() {
-                    Some(Term::Constant(_, Constant::Atom(atom, _))) =>
-                        Some(atom),
+                    Some(Term::Constant(_, Constant::Atom(atom, spec))) =>
+                        Some((atom, spec)),
                     Some(term) => {
                         self.terms.push(term);
                         None
@@ -225,15 +228,15 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn push_binary_op(&mut self, td: TokenDesc, spec: Specifier, assoc: u32)
+    fn push_binary_op(&mut self, td: TokenDesc, spec: Specifier)
     {
         if let Some(arg2) = self.terms.pop() {
-            if let Some(name) = self.get_term_name(td.tt) {
+            if let Some((name, table_spec)) = self.get_term_name(td.tt) {
                 if let Some(arg1) = self.terms.pop() {
                     let term = Term::Clause(Cell::default(),
                                             name,
                                             vec![Box::new(arg1), Box::new(arg2)],
-                                            Some((td.priority, assoc)));
+                                            table_spec);
 
                     self.terms.push(term);
                     self.stack.push(TokenDesc { tt: TokenType::Term,
@@ -252,9 +255,9 @@ impl<R: Read> Parser<R> {
                     swap(&mut arg1, &mut name);
                 }
 
-                if let Term::Constant(_, Constant::Atom(name, _)) = name {
+                if let Term::Constant(_, Constant::Atom(name, shared_op_desc)) = name {
                     let term = Term::Clause(Cell::default(), name, vec![Box::new(arg1)],
-                                            Some((td.priority, assoc)));
+                                            shared_op_desc);
 
                     self.terms.push(term);
                     self.stack.push(TokenDesc { tt: TokenType::Term,
@@ -265,22 +268,18 @@ impl<R: Read> Parser<R> {
         }
     }
 
-    fn promote_atom_op(&mut self, atom: ClauseName, spec: Specifier, priority: usize) -> TokenType
+    fn promote_atom_op(&mut self, atom: ClauseName, priority: usize, assoc: u32,
+                       op_dir_val: Option<OpDirValue>)
     {
-        let op_decl = if is_infix!(spec) || is_prefix!(spec) || is_postfix!(spec) {
-            Some((priority, spec))
-        } else {
-            None
-        };
-
-        self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, op_decl)));
-        TokenType::Term
+        let spec = op_dir_val.map(|op_dir_val| op_dir_val.shared_op_desc());
+        
+        self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, spec)));
+        self.stack.push(TokenDesc { tt: TokenType::Term, priority, spec: assoc });
     }
 
-    fn shift(&mut self, token: Token, priority: usize, spec: Specifier) {
+    fn shift(&mut self, token: Token, priority: usize, spec: Specifier)
+    {
         let tt = match token {
-            Token::Constant(Constant::Atom(atom, _)) =>
-                self.promote_atom_op(atom, spec, priority),
             Token::Constant(c) => {
                 self.terms.push(Term::Constant(Cell::default(), c));
                 TokenType::Term
@@ -316,17 +315,17 @@ impl<R: Read> Parser<R> {
                     if let Some(desc3) = self.stack.pop() {
                         if is_xfx!(desc2.spec) && affirm_xfx(priority, desc2, desc3, desc1)
                         {
-                            self.push_binary_op(desc2, LTERM, XFX);
+                            self.push_binary_op(desc2, LTERM); //, XFX);
                             continue;
                         }
                         else if is_yfx!(desc2.spec) && affirm_yfx(priority, desc2, desc3, desc1)
                         {
-                            self.push_binary_op(desc2, LTERM, YFX);
+                            self.push_binary_op(desc2, LTERM);//, YFX);
                             continue;
                         }
                         else if is_xfy!(desc2.spec) && affirm_xfy(priority, desc2, desc3, desc1)
                         {
-                            self.push_binary_op(desc2, TERM, XFY);
+                            self.push_binary_op(desc2, TERM);//, XFY);
                             continue;
                         } else {
                             self.stack.push(desc3);
@@ -602,18 +601,21 @@ impl<R: Read> Parser<R> {
 
         let idx = self.stack.len() - 2;
 
-        match self.stack.remove(idx).tt {
-            TokenType::Open | TokenType::OpenCT => {
-                if let Some((atom, spec)) = sep_to_atom(self.stack[idx].tt) {
-                    self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, spec)));
-                }
+        match self.stack.remove(idx) {
+            td =>
+                match td.tt {
+                    TokenType::Open | TokenType::OpenCT => {
+                        if let Some(atom) = sep_to_atom(self.stack[idx].tt) {
+                            self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, None)));
+                        }
 
-                self.stack[idx].spec = TERM;
-                self.stack[idx].tt = TokenType::Term;
-                self.stack[idx].priority = 0;
-                true
-            },
-            _ => false
+                        self.stack[idx].spec = TERM;
+                        self.stack[idx].tt = TokenType::Term;
+                        self.stack[idx].priority = 0;
+                        true
+                    },
+                    _ => false
+                }
         }
     }
 
@@ -625,33 +627,56 @@ impl<R: Read> Parser<R> {
                         // can't be prefix, so either inf == 0
                         // or post == 0.
                         self.reduce_op(inf + post);
-                        self.shift(Token::Constant(Constant::Atom(name, None)),
-                                   inf + post,
-                                   spec & (XFX | XFY | YFX | YF | XF));
+
+                        let fixity = if inf > 0 { Fixity::In } else { Fixity::Post };
+                        let op_dir_val = op_dir.get(name.clone(), fixity);
+                                                    
+                        self.promote_atom_op(name, inf + post, spec & (XFX | XFY | YFX | YF | XF),
+                                             op_dir_val);
                     },
                     _ => {
                         self.reduce_op(inf + post);
+
                         if let Some(TokenDesc { spec: pspec, .. }) = self.stack.last().cloned() {
                             // rterm.c: 412
                             if is_term!(pspec) {
-                                self.shift(Token::Constant(Constant::Atom(name, None)),
-                                           inf + post,
-                                           spec & (XFX | XFY | YFX | XF | YF));
+                                let op_dir_val = op_dir.get(name.clone(),
+                                                            if inf > 0 {
+                                                                Fixity::In
+                                                            } else {
+                                                                Fixity::Post
+                                                            });
+
+                                self.promote_atom_op(name, inf + post,
+                                                     spec & (XFX | XFY | YFX | XF | YF),
+                                                     op_dir_val);
                             } else {
-                                self.shift(Token::Constant(Constant::Atom(name, None)),
-                                           pre,
-                                           prefix!(spec));
+                                let op_dir_val = op_dir.get(name.clone(), Fixity::Pre);
+                                self.promote_atom_op(name, pre, prefix!(spec), op_dir_val);
                             }
                         } else {
-                            self.shift(Token::Constant(Constant::Atom(name, None)),
-                                       pre,
-                                       spec & (FX | FY));
+                            let op_dir_val = op_dir.get(name.clone(), Fixity::Pre);
+                            self.promote_atom_op(name, pre, spec & (FX | FY), op_dir_val);
                         }
                     }
                 }
             } else {
+                let op_dir_val = op_dir.get(name.clone(),
+                                            if pre == 0 && inf == 0 {
+                                                Fixity::Post
+                                            } else if post == 0 && pre == 0 {
+                                                Fixity::In
+                                            } else {
+                                                Fixity::Pre
+                                            });
+
+                // this can happen with dynamic updates to operator precedence.
+                if pre + inf + post == 0 {
+                    return Ok(false);
+                }
+
                 self.reduce_op(pre + inf + post); // only one non-zero priority among these.
-                self.shift(Token::Constant(Constant::Atom(name, None)), pre + inf + post, spec);
+                self.promote_atom_op(name, pre + inf + post, spec, op_dir_val);
             }
 
             Ok(true)
@@ -755,6 +780,7 @@ impl<R: Read> Parser<R> {
     }
 
     pub fn read_term(&mut self, op_dir: CompositeOp) -> Result<Term, ParserError> {
+
         loop {
             let token = try!(self.lexer.next_token());
             let at_end = Token::End == token;

@@ -233,8 +233,27 @@ impl GenContext {
 
 pub type OpDirKey = (ClauseName, Fixity);
 
+#[derive(Clone)]
+pub struct OpDirValue(pub SharedOpDesc, pub ClauseName);
+
+impl OpDirValue {
+    pub fn new(spec: Specifier, priority: usize, module_name: ClauseName) -> Self {
+        OpDirValue(SharedOpDesc::new(priority, spec), module_name)
+    }
+
+    #[inline]
+    pub fn shared_op_desc(&self) -> SharedOpDesc {
+        self.0.clone()
+    }
+
+    #[inline]
+    pub fn owning_module(&self) -> ClauseName {
+        self.1.clone()
+    }
+}
+
 // name and fixity -> operator type and precedence.
-pub type OpDir = HashMap<OpDirKey, (Specifier, usize, ClauseName)>;
+pub type OpDir = HashMap<OpDirKey, OpDirValue>;
 
 #[derive(Clone, Copy)]
 pub struct MachineFlags {
@@ -280,10 +299,10 @@ pub fn default_op_dir() -> OpDir {
     let module_name = clause_name!("builtins");
     let mut op_dir = OpDir::new();
 
-    op_dir.insert((clause_name!(":-"), Fixity::In),  (XFX, 1200, module_name.clone()));
-    op_dir.insert((clause_name!(":-"), Fixity::Pre), (FX,  1200, module_name.clone()));
-    op_dir.insert((clause_name!("?-"), Fixity::Pre), (FX,  1200, module_name.clone()));
-    op_dir.insert((clause_name!(","), Fixity::In),   (XFY, 1000, module_name.clone()));
+    op_dir.insert((clause_name!(":-"), Fixity::In),  OpDirValue::new(XFX, 1200, module_name.clone()));
+    op_dir.insert((clause_name!(":-"), Fixity::Pre), OpDirValue::new(FX,  1200, module_name.clone()));
+    op_dir.insert((clause_name!("?-"), Fixity::Pre), OpDirValue::new(FX,  1200, module_name.clone()));
+    op_dir.insert((clause_name!(","), Fixity::In),   OpDirValue::new(XFY, 1000, module_name.clone()));
 
     op_dir
 }
@@ -400,9 +419,54 @@ pub enum Fixity {
     In, Post, Pre
 }
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SharedOpDesc(Rc<Cell<(usize, Specifier)>>);
+
+impl SharedOpDesc {
+    #[inline]
+    pub fn new(priority: usize, spec: Specifier) -> Self {
+        SharedOpDesc(Rc::new(Cell::new((priority, spec))))
+    }
+
+    #[inline]
+    pub fn arity(&self) -> usize {
+        if self.get().1 & (XFX | XFY | YFX) == 0 {
+            1
+        } else {
+            2
+        }
+    }
+
+    #[inline]
+    pub fn get(&self) -> (usize, Specifier) {
+        self.0.get()
+    }
+
+    #[inline]
+    pub fn set(&self, prec: usize, spec: Specifier) {
+        self.0.set((prec, spec));
+    }
+    
+    #[inline]
+    pub fn prec(&self) -> usize {
+        self.0.get().0
+    }
+
+    #[inline]
+    pub fn assoc(&self) -> Specifier {
+        self.0.get().1
+    }
+}
+
+impl Hash for SharedOpDesc {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.get().hash(state);
+    }
+}
+
 #[derive(Clone, Hash)]
 pub enum Constant {
-    Atom(ClauseName, Option<(usize, Specifier)>),
+    Atom(ClauseName, Option<SharedOpDesc>),
     CharCode(u8),
     Char(char),
     Number(Number),
@@ -964,13 +1028,21 @@ impl Neg for Number {
 #[derive(PartialEq, Eq, Clone)]
 pub enum Term {
     AnonVar,
-    Clause(Cell<RegType>, ClauseName, Vec<Box<Term>>, Option<(usize, Specifier)>),
+    Clause(Cell<RegType>, ClauseName, Vec<Box<Term>>, Option<SharedOpDesc>),
     Cons(Cell<RegType>, Box<Term>, Box<Term>),
     Constant(Cell<RegType>, Constant),
     Var(Cell<VarReg>, Rc<Var>)
 }
 
 impl Term {
+    pub fn shared_op_desc(&self) -> Option<SharedOpDesc> {
+        match self {
+            &Term::Clause(_, _, _, ref spec) => spec.clone(),
+            &Term::Constant(_, Constant::Atom(_, ref spec)) => spec.clone(),
+            _ => None
+        }
+    }
+
     pub fn to_constant(self) -> Option<Constant> {
         match self {
             Term::Constant(_, c) => Some(c),
@@ -1023,10 +1095,11 @@ macro_rules! composite_op {
     )
 }
 
-impl<'a, 'b> CompositeOp<'a, 'b> {
+impl<'a, 'b> CompositeOp<'a, 'b>
+{
     #[inline]
     pub(crate)
-    fn get(&self, name: ClauseName, fixity: Fixity) -> Option<(Specifier, usize, ClauseName)>
+    fn get(&self, name: ClauseName, fixity: Fixity) -> Option<OpDirValue>
     {
         self.op_dir.get(&(name.clone(), fixity))
             .or_else(move || self.static_op_dir.and_then(|op_dir| op_dir.get(&(name, fixity))))

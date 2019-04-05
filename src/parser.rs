@@ -76,6 +76,8 @@ pub fn get_desc(name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc>
         if pri > 0 {
             op_desc.pre = pri;
             op_desc.spec |= spec;
+        } else if name.as_str() == "-" {
+            op_desc.spec |= NEGATIVE_SIGN;
         }
     }
 
@@ -97,12 +99,7 @@ pub fn get_desc(name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc>
         }
     }
 
-    if name.as_str() == "-" && op_desc.pre == 0 {
-        op_desc.pre = 1;
-        op_desc.spec |= FY;
-    }
-
-    if op_desc.pre + op_desc.post + op_desc.inf == 0 {
+    if op_desc.pre + op_desc.post + op_desc.inf == 0 && !is_negate!(op_desc.spec) {
         None
     } else {
         Some(op_desc)
@@ -142,7 +139,6 @@ fn affirm_yf(d1: TokenDesc, d2: TokenDesc) -> bool
     is_term!(d2.spec)
         && d2.priority < d1.priority
         && is_lterm!(d2.spec)
-        && d2.priority < d1.priority
 }
 
 fn affirm_xf(d1: TokenDesc, d2: TokenDesc) -> bool
@@ -376,7 +372,7 @@ impl<R: Read> Parser<R> {
             if i % 2 == 0 { // expect a term or non-comma operator.
                 if let TokenType::Comma = desc.tt {
                     return None;
-                } else if is_term!(desc.spec) || is_op!(desc.spec) {
+                } else if is_term!(desc.spec) || is_op!(desc.spec) || is_negate!(desc.spec) {
                     arity += 1;
                 } else {
                     return None;
@@ -632,7 +628,7 @@ impl<R: Read> Parser<R> {
 
     fn shift_op(&mut self, name: ClauseName, op_dir: CompositeOp) -> Result<bool, ParserError> {
         if let Some(OpDesc { pre, inf, post, spec }) = get_desc(name.clone(), op_dir) {
-            if pre > 0 && inf + post > 0 {
+            if (pre > 0 && inf + post > 0) || is_negate!(spec) {
                 match try!(self.lexer.lookahead_char()) {
                     '(' => {
                         // can't be prefix, so either inf == 0
@@ -659,11 +655,11 @@ impl<R: Read> Parser<R> {
                                                      op_dir_val);
                             } else {
                                 let op_dir_val = op_dir.get(name.clone(), Fixity::Pre);
-                                self.promote_atom_op(name, pre, spec & (FX | FY), op_dir_val);
+                                self.promote_atom_op(name, pre, spec & (FX | FY | NEGATIVE_SIGN), op_dir_val);
                             }
                         } else {
                             let op_dir_val = op_dir.get(name.clone(), Fixity::Pre);
-                            self.promote_atom_op(name, pre, spec & (FX | FY), op_dir_val);
+                            self.promote_atom_op(name, pre, spec & (FX | FY | NEGATIVE_SIGN), op_dir_val);
                         }
                     }
                 }
@@ -712,7 +708,7 @@ impl<R: Read> Parser<R> {
                     if let Some(term) = self.terms.last().cloned() {
                         match term {
                             Term::Constant(_, Constant::Atom(ref name, _))
-                                if name.as_str() == "-" && is_prefix!(desc.spec) => {
+                                if name.as_str() == "-" && (is_prefix!(desc.spec) || is_negate!(desc.spec)) => {
                                     self.stack.pop();
                                     self.terms.pop();
                                     

@@ -35,6 +35,8 @@ pub const DELIMITER: u32 = 0x0100;
 pub const TERM: u32  = 0x1000;
 pub const LTERM: u32 = 0x3000;
 
+pub const NEGATIVE_SIGN: u32 = 0x0200;
+
 #[macro_export]
 macro_rules! clause_name {
     ($name: expr, $tbl: expr) => (
@@ -78,6 +80,10 @@ macro_rules! is_lterm {
 
 macro_rules! is_op {
     ($x:expr) => ( $x & (XF | YF | FX | FY | XFX | XFY | YFX) != 0 )
+}
+
+macro_rules! is_negate {
+    ($x:expr) => ( ($x & NEGATIVE_SIGN) != 0 )
 }
 
 #[macro_export]

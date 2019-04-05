@@ -545,11 +545,6 @@ impl<R: Read> Lexer<R> {
         } else if single_quote_char!(c) {
             self.skip_char()?;
 
-            if '\'' == self.lookahead_char()? {
-                self.skip_char()?;
-                return Ok(Token::Constant(Constant::Atom(clause_name!("''"), None)));
-            }
-
             consume_chars_with!(token, self.get_single_quoted_item());
 
             if single_quote_char!(self.lookahead_char()?) {

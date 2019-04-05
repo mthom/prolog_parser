@@ -73,25 +73,36 @@ pub fn get_desc(name: ClauseName, op_dir: CompositeOp) -> Option<OpDesc>
     if let Some(OpDirValue(cell, _)) = op_dir.get(name.clone(), Fixity::Pre) {
         let (pri, spec) = cell.get();
 
-        op_desc.pre = pri;
-        op_desc.spec |= spec;
+        if pri > 0 {
+            op_desc.pre = pri;
+            op_desc.spec |= spec;
+        }
     }
 
     if let Some(OpDirValue(cell, _)) = op_dir.get(name.clone(), Fixity::Post) {
         let (pri, spec) = cell.get();
 
-        op_desc.post = pri;
-        op_desc.spec |= spec;
+        if pri > 0 {
+            op_desc.post = pri;
+            op_desc.spec |= spec;
+        }
     }
 
     if let Some(OpDirValue(cell, _)) = op_dir.get(name.clone(), Fixity::In) {
         let (pri, spec) = cell.get();
 
-        op_desc.inf = pri;
-        op_desc.spec |= spec;
+        if pri > 0 {
+            op_desc.inf = pri;
+            op_desc.spec |= spec;
+        }
     }
 
-    if op_desc.pre == 0 && op_desc.post == 0 && op_desc.inf == 0 {
+    if name.as_str() == "-" && op_desc.pre == 0 {
+        op_desc.pre = 1;
+        op_desc.spec |= FY;
+    }
+
+    if op_desc.pre + op_desc.post + op_desc.inf == 0 {
         None
     } else {
         Some(op_desc)
@@ -231,12 +242,12 @@ impl<R: Read> Parser<R> {
     fn push_binary_op(&mut self, td: TokenDesc, spec: Specifier)
     {
         if let Some(arg2) = self.terms.pop() {
-            if let Some((name, table_spec)) = self.get_term_name(td.tt) {
+            if let Some((name, shared_op_desc)) = self.get_term_name(td.tt) {
                 if let Some(arg1) = self.terms.pop() {
                     let term = Term::Clause(Cell::default(),
                                             name,
                                             vec![Box::new(arg1), Box::new(arg2)],
-                                            table_spec);
+                                            shared_op_desc);
 
                     self.terms.push(term);
                     self.stack.push(TokenDesc { tt: TokenType::Term,
@@ -640,19 +651,15 @@ impl<R: Read> Parser<R> {
                         if let Some(TokenDesc { spec: pspec, .. }) = self.stack.last().cloned() {
                             // rterm.c: 412
                             if is_term!(pspec) {
-                                let op_dir_val = op_dir.get(name.clone(),
-                                                            if inf > 0 {
-                                                                Fixity::In
-                                                            } else {
-                                                                Fixity::Post
-                                                            });
+                                let fixity = if inf > 0 { Fixity::In } else { Fixity::Post };
+                                let op_dir_val = op_dir.get(name.clone(), fixity);
 
                                 self.promote_atom_op(name, inf + post,
                                                      spec & (XFX | XFY | YFX | XF | YF),
                                                      op_dir_val);
                             } else {
                                 let op_dir_val = op_dir.get(name.clone(), Fixity::Pre);
-                                self.promote_atom_op(name, pre, prefix!(spec), op_dir_val);
+                                self.promote_atom_op(name, pre, spec & (FX | FY), op_dir_val);
                             }
                         } else {
                             let op_dir_val = op_dir.get(name.clone(), Fixity::Pre);
@@ -662,18 +669,13 @@ impl<R: Read> Parser<R> {
                 }
             } else {
                 let op_dir_val = op_dir.get(name.clone(),
-                                            if pre == 0 && inf == 0 {
+                                            if pre + inf == 0 {
                                                 Fixity::Post
-                                            } else if post == 0 && pre == 0 {
+                                            } else if post + pre == 0 {
                                                 Fixity::In
                                             } else {
                                                 Fixity::Pre
                                             });
-
-                // this can happen with dynamic updates to operator precedence.
-                if pre + inf + post == 0 {
-                    return Ok(false);
-                }
 
                 self.reduce_op(pre + inf + post); // only one non-zero priority among these.
                 self.promote_atom_op(name, pre + inf + post, spec, op_dir_val);
@@ -705,19 +707,19 @@ impl<R: Read> Parser<R> {
 
     fn shift_token(&mut self, token: Token, op_dir: CompositeOp) -> Result<(), ParserError> {
         match token {
-            Token::Constant(Constant::Number(n)) => {
-                if let Some(desc) = self.stack.pop() {
-                    if let Some(term) = self.terms.pop() {
+            Token::Constant(Constant::Number(n)) => {                
+                if let Some(desc) = self.stack.last().cloned() {
+                    if let Some(term) = self.terms.last().cloned() {
                         match term {
                             Term::Constant(_, Constant::Atom(ref name, _))
                                 if name.as_str() == "-" && is_prefix!(desc.spec) => {
+                                    self.stack.pop();
+                                    self.terms.pop();
+                                    
                                     self.shift(Token::Constant(Constant::Number(-n)), 0, TERM);
                                     return Ok(());
                                 },
-                            _ => {
-                                self.terms.push(term);
-                                self.stack.push(desc);
-                            }
+                            _ => {}
                         }
                     }
                 }

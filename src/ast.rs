@@ -130,10 +130,6 @@ macro_rules! is_fy {
     ($x:expr) => ( ($x & FY) != 0 )
 }
 
-macro_rules! prefix {
-    ($x:expr) => ($x & (FX | FY))
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RegType {
     Perm(usize),
@@ -240,7 +236,7 @@ impl OpDirValue {
     pub fn new(spec: Specifier, priority: usize, module_name: ClauseName) -> Self {
         OpDirValue(SharedOpDesc::new(priority, spec), module_name)
     }
-
+    
     #[inline]
     pub fn shared_op_desc(&self) -> SharedOpDesc {
         self.0.clone()
@@ -429,7 +425,7 @@ impl SharedOpDesc {
     }
 
     #[inline]
-    pub fn arity(&self) -> usize {
+    pub fn arity(&self) -> usize {        
         if self.get().1 & (XFX | XFY | YFX) == 0 {
             1
         } else {

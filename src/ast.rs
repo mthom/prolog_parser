@@ -416,7 +416,7 @@ impl From<Utf8Error> for ParserError {
     }
 }
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum Fixity {
     In, Post, Pre
 }

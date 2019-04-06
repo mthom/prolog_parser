@@ -136,9 +136,8 @@ fn affirm_xfy(priority: usize, d2: TokenDesc, d3: TokenDesc, d1: TokenDesc) -> b
 
 fn affirm_yf(d1: TokenDesc, d2: TokenDesc) -> bool
 {
-    is_term!(d2.spec)
-        && d2.priority < d1.priority
-        && is_lterm!(d2.spec)
+    let is_valid_lterm = is_lterm!(d2.spec) && d2.priority == d1.priority;
+    (is_term!(d2.spec) && d2.priority < d1.priority) || is_valid_lterm
 }
 
 fn affirm_xf(d1: TokenDesc, d2: TokenDesc) -> bool
@@ -232,7 +231,7 @@ impl<R: Read> Parser<R> {
                     _ => None
                 },
             _ => None
-        }
+            }
     }
 
     fn push_binary_op(&mut self, td: TokenDesc, spec: Specifier)
@@ -279,7 +278,7 @@ impl<R: Read> Parser<R> {
                        op_dir_val: Option<OpDirValue>)
     {
         let spec = op_dir_val.map(|op_dir_val| op_dir_val.shared_op_desc());
-        
+
         self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, spec)));
         self.stack.push(TokenDesc { tt: TokenType::Term, priority, spec: assoc });
     }
@@ -612,6 +611,10 @@ impl<R: Read> Parser<R> {
             td =>
                 match td.tt {
                     TokenType::Open | TokenType::OpenCT => {
+                        if self.stack[idx].tt == TokenType::Comma {
+                            return false;
+                        }
+                        
                         if let Some(atom) = sep_to_atom(self.stack[idx].tt) {
                             self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, None)));
                         }
@@ -637,7 +640,7 @@ impl<R: Read> Parser<R> {
 
                         let fixity = if inf > 0 { Fixity::In } else { Fixity::Post };
                         let op_dir_val = op_dir.get(name.clone(), fixity);
-                                                    
+
                         self.promote_atom_op(name, inf + post, spec & (XFX | XFY | YFX | YF | XF),
                                              op_dir_val);
                     },
@@ -703,7 +706,7 @@ impl<R: Read> Parser<R> {
 
     fn shift_token(&mut self, token: Token, op_dir: CompositeOp) -> Result<(), ParserError> {
         match token {
-            Token::Constant(Constant::Number(n)) => {                
+            Token::Constant(Constant::Number(n)) => {
                 if let Some(desc) = self.stack.last().cloned() {
                     if let Some(term) = self.terms.last().cloned() {
                         match term {
@@ -711,7 +714,7 @@ impl<R: Read> Parser<R> {
                                 if name.as_str() == "-" && (is_prefix!(desc.spec) || is_negate!(desc.spec)) => {
                                     self.stack.pop();
                                     self.terms.pop();
-                                    
+
                                     self.shift(Token::Constant(Constant::Number(-n)), 0, TERM);
                                     return Ok(());
                                 },
@@ -750,8 +753,17 @@ impl<R: Read> Parser<R> {
                     return Err(ParserError::IncompleteReduction);
                 },
             Token::HeadTailSeparator => {
-                self.reduce_op(1000);
-                self.shift(Token::HeadTailSeparator, 1000, DELIMITER);
+                let name = clause_name!("|");
+
+                if get_desc(name.clone(), op_dir).is_some() {
+                    // treat '|' like any other operator if it is defined as one.
+                    if !self.shift_op(name.clone(), op_dir)? {
+                        self.shift(Token::Constant(Constant::Atom(name, None)), 0, TERM);
+                    }
+                } else {
+                    self.reduce_op(1000);
+                    self.shift(Token::HeadTailSeparator, 1000, DELIMITER);
+                }
             },
             Token::Comma => {
                 self.reduce_op(1000);

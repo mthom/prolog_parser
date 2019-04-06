@@ -507,7 +507,7 @@ impl<R: Read> Lexer<R> {
 
             Ok(BigInt::parse_bytes(s.as_bytes(), 2).ok_or(ParserError::ParseBigInt)?)
         } else {
-            self.return_char('o');
+            self.return_char('b');
             Err(ParserError::ParseBigInt)
         }
     }
@@ -578,7 +578,7 @@ impl<R: Read> Lexer<R> {
 
         token.push(self.skip_char()?);
         let mut c = self.lookahead_char()?;
-        
+
         while decimal_digit_char!(c) {
             token.push(c);
             self.skip_char()?;
@@ -659,11 +659,35 @@ impl<R: Read> Lexer<R> {
         } else {
             if token.starts_with('0') && token.len() == 1 {
                 if c == 'x' {
-                    Ok(Token::Constant(integer!(self.hexadecimal_constant()?)))
+                    Ok(Token::Constant(integer!(self.hexadecimal_constant()
+                                                    .or_else(|e| {
+                                                        if let ParserError::ParseBigInt = e {
+                                                            Ok(BigInt::parse_bytes(token.as_bytes(), 10)
+                                                               .ok_or(ParserError::ParseBigInt)?)
+                                                        } else {
+                                                            Err(e)
+                                                        }
+                                                    })?)))
                 } else if c == 'o' {
-                    Ok(Token::Constant(integer!(self.octal_constant()?)))
+                    Ok(Token::Constant(integer!(self.octal_constant()
+                                                    .or_else(|e| {
+                                                        if let ParserError::ParseBigInt = e {
+                                                            Ok(BigInt::parse_bytes(token.as_bytes(), 10)
+                                                               .ok_or(ParserError::ParseBigInt)?)
+                                                        } else {
+                                                            Err(e)
+                                                        }
+                                                    })?)))
                 } else if c == 'b' {
-                    Ok(Token::Constant(integer!(self.binary_constant()?)))
+                    Ok(Token::Constant(integer!(self.binary_constant()
+                                                    .or_else(|e| {
+                                                        if let ParserError::ParseBigInt = e {
+                                                            Ok(BigInt::parse_bytes(token.as_bytes(), 10)
+                                                               .ok_or(ParserError::ParseBigInt)?)
+                                                        } else {
+                                                            Err(e)
+                                                        }
+                                                    })?)))
                 } else if single_quote_char!(c) {
                     self.skip_char()?;
                     self.get_single_quoted_char()

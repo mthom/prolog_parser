@@ -431,6 +431,11 @@ impl SharedOpDesc {
     }
 
     #[inline]
+    pub fn ptr_eq(lop_desc: &SharedOpDesc, rop_desc: &SharedOpDesc) -> bool {
+        Rc::ptr_eq(&lop_desc.0, &rop_desc.0)
+    }
+    
+    #[inline]
     pub fn arity(&self) -> usize {        
         if self.get().1 & (XFX | XFY | YFX) == 0 {
             1

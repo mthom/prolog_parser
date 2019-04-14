@@ -1,6 +1,6 @@
-use std::iter::Peekable;
-
 // derived from the itertools source.
+
+use std::iter::Peekable;
 
 #[derive(Debug, Clone)]
 pub struct PutBackN<I: Iterator> {
@@ -22,15 +22,15 @@ impl<I: Iterator> PutBackN<I> {
     pub fn extend<Iter: Iterator<Item=I::Item>>(&mut self, iter: Iter) {
         let mut buf: Vec<_> = iter.collect();
         buf.reverse();
-        
+
         for i in buf {
             self.top.push(i);
         }
     }
-    
+
     #[inline]
-    pub fn put_back(&mut self, x: I::Item) {
-        self.top.push(x);
+    pub fn put_back(&mut self, item: I::Item) {
+        self.top.push(item);
     }
 
     #[inline]
@@ -45,7 +45,7 @@ impl<I: Iterator> PutBackN<I> {
 
 impl<I: Iterator> Iterator for PutBackN<I> {
     type Item = I::Item;
-    
+
     #[inline]
     fn next(&mut self) -> Option<I::Item> {
         if self.top.is_empty() {

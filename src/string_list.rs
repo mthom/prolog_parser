@@ -68,7 +68,7 @@ impl StringList {
             expandable: Rc::new(Cell::new(expandable))
         }
     }
-
+    
     #[inline]
     pub fn is_expandable(&self) -> bool {
         self.expandable.get()

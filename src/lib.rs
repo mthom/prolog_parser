@@ -7,7 +7,7 @@ extern crate ordered_float;
 #[macro_use] pub mod macros;
 pub mod string_list;
 pub mod parser;
+pub mod put_back_n;
 
 // internal parts.
-mod put_back_n;
 mod lexer;

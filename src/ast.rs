@@ -5,12 +5,14 @@ use ordered_float::*;
 use string_list::*;
 use tabled_rc::*;
 
+use put_back_n::*;
+
 use std::cell::Cell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::io::Error as IOError;
+use std::io::{Bytes, Error as IOError, Read};
 use std::ops::{Add, Div, Sub, Mul, MulAssign, Neg};
 use std::rc::Rc;
 use std::str::Utf8Error;
@@ -242,7 +244,7 @@ impl OpDirValue {
     pub fn new(spec: Specifier, priority: usize, module_name: ClauseName) -> Self {
         OpDirValue(SharedOpDesc::new(priority, spec), module_name)
     }
-    
+
     #[inline]
     pub fn shared_op_desc(&self) -> SharedOpDesc {
         self.0.clone()
@@ -321,6 +323,7 @@ pub enum ArithmeticError {
 pub enum ParserError {
     Arithmetic(ArithmeticError),
     BackQuotedString,
+    BadPendingByte,
     // BuiltInArityMismatch(&'static str),
     CannotParseCyclicTerm,
     UnexpectedChar(char),
@@ -352,6 +355,8 @@ impl ParserError {
                 "arithmetic_error",
             &ParserError::BackQuotedString =>
                 "back_quoted_string",
+            &ParserError::BadPendingByte =>
+                "bad_pending_byte",
             &ParserError::UnexpectedChar(_) =>
                 "unexpected_char",
             &ParserError::UnexpectedEOF =>
@@ -434,9 +439,9 @@ impl SharedOpDesc {
     pub fn ptr_eq(lop_desc: &SharedOpDesc, rop_desc: &SharedOpDesc) -> bool {
         Rc::ptr_eq(&lop_desc.0, &rop_desc.0)
     }
-    
+
     #[inline]
-    pub fn arity(&self) -> usize {        
+    pub fn arity(&self) -> usize {
         if self.get().1 & (XFX | XFY | YFX) == 0 {
             1
         } else {
@@ -453,7 +458,7 @@ impl SharedOpDesc {
     pub fn set(&self, prec: usize, spec: Specifier) {
         self.0.set((prec, spec));
     }
-    
+
     #[inline]
     pub fn prec(&self) -> usize {
         self.0.get().0
@@ -1112,4 +1117,11 @@ impl<'a, 'b> CompositeOp<'a, 'b>
             .or_else(move || self.static_op_dir.and_then(|op_dir| op_dir.get(&(name, fixity))))
             .cloned()
     }
+}
+
+pub type ParsingStream<R> = PutBackN<Bytes<R>>;
+
+#[inline]
+pub fn parsing_stream<R: Read>(src: R) -> ParsingStream<R> {
+    put_back_n(src.bytes())
 }

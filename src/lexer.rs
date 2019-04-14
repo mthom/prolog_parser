@@ -3,13 +3,12 @@ extern crate num;
 use num::ToPrimitive;
 use ordered_float::*;
 use num::bigint::BigInt;
-use put_back_n::*;
 
 use ast::*;
 use string_list::*;
 use tabled_rc::*;
 
-use std::io::{BufReader, Bytes, Read};
+use std::io::Read;
 use std::rc::Rc;
 
 macro_rules! is_not_eof {
@@ -59,19 +58,17 @@ pub enum Token {
     End
 }
 
-pub struct Lexer<R> where R: Read {
+pub struct Lexer<'a, R: Read> {
     pub(crate) atom_tbl: TabledData<Atom>,
-    pub(crate) reader: PutBackN<Bytes<BufReader<R>>>,
+    pub(crate) reader: &'a mut ParsingStream<R>,
     flags: MachineFlags,
     line_num: usize,
 }
 
-impl<R: Read> Lexer<R> {
-    pub fn new(atom_tbl: TabledData<Atom>, flags: MachineFlags, src: R) -> Self
+impl<'a, R: Read> Lexer<'a, R> {
+    pub fn new(atom_tbl: TabledData<Atom>, flags: MachineFlags, src: &'a mut ParsingStream<R>) -> Self
     {
-        Lexer { atom_tbl, flags,
-                reader: put_back_n(BufReader::new(src).bytes()),
-                line_num: 0 }
+        Lexer { atom_tbl, flags, reader: src, line_num: 0 }
     }
 
     fn return_char(&mut self, c: char) {

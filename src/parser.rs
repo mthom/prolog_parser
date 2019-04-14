@@ -188,16 +188,17 @@ pub struct OpDesc {
     pub spec: Specifier
 }
 
-pub struct Parser<R> where R: Read {
-    lexer: Lexer<R>,
+pub struct Parser<'a, R: Read> {
+    lexer: Lexer<'a, R>,
     stack: Vec<TokenDesc>,
     terms: Vec<Term>,
 }
 
-impl<R: Read> Parser<R> {
-    pub fn new(inner: R, atom_tbl: TabledData<Atom>, flags: MachineFlags) -> Self
+impl<'a, R: Read> Parser<'a, R> {
+    pub
+    fn new(stream: &'a mut ParsingStream<R>, atom_tbl: TabledData<Atom>, flags: MachineFlags) -> Self
     {
-        Parser { lexer:  Lexer::new(atom_tbl, flags, inner),
+        Parser { lexer:  Lexer::new(atom_tbl, flags, stream),
                  stack:  Vec::new(),
                  terms:  Vec::new() }
     }
@@ -291,7 +292,7 @@ impl<R: Read> Parser<R> {
                 TokenType::Term
             },
             Token::Var(v) => {
-                if v.as_str() == "_" {
+                if v.trim() == "_" {
                     self.terms.push(Term::AnonVar);
                 } else {
                     self.terms.push(Term::Var(Cell::default(), v));
@@ -614,7 +615,7 @@ impl<R: Read> Parser<R> {
                         if self.stack[idx].tt == TokenType::Comma {
                             return false;
                         }
-                        
+
                         if let Some(atom) = sep_to_atom(self.stack[idx].tt) {
                             self.terms.push(Term::Constant(Cell::default(), Constant::Atom(atom, None)));
                         }

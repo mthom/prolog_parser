@@ -190,15 +190,37 @@ pub struct OpDesc {
 
 pub struct Parser<'a, R: Read> {
     lexer: Lexer<'a, R>,
+    tokens: Vec<Token>,
     stack: Vec<TokenDesc>,
     terms: Vec<Term>,
+}
+
+fn read_tokens<'a, R: Read>(lexer: &mut Lexer<'a, R>) -> Result<Vec<Token>, ParserError>
+{
+    let mut tokens = vec![];
+    
+    loop {
+        let token = lexer.next_token()?;
+        let at_end = Token::End == token;
+
+        tokens.push(token);
+        
+        if at_end {
+            break;
+        }
+    }
+
+    tokens.reverse();
+    
+    Ok(tokens)
 }
 
 impl<'a, R: Read> Parser<'a, R> {
     pub
     fn new(stream: &'a mut ParsingStream<R>, atom_tbl: TabledData<Atom>, flags: MachineFlags) -> Self
     {
-        Parser { lexer:  Lexer::new(atom_tbl, flags, stream),
+        Parser { lexer: Lexer::new(atom_tbl, flags, stream),
+                 tokens: vec![],
                  stack:  Vec::new(),
                  terms:  Vec::new() }
     }
@@ -600,7 +622,7 @@ impl<'a, R: Read> Parser<'a, R> {
             return false;
         }
 
-        self.reduce_op(1201);
+        self.reduce_op(1400);
 
         if self.stack.len() == 1 {
             return false;
@@ -633,8 +655,8 @@ impl<'a, R: Read> Parser<'a, R> {
     fn shift_op(&mut self, name: ClauseName, op_dir: CompositeOp) -> Result<bool, ParserError> {
         if let Some(OpDesc { pre, inf, post, spec }) = get_desc(name.clone(), op_dir) {
             if (pre > 0 && inf + post > 0) || is_negate!(spec) {
-                match try!(self.lexer.lookahead_char()) {
-                    '(' => {
+                match self.tokens.last().ok_or(ParserError::UnexpectedEOF)? {
+                    &Token::OpenCT => { // do this when layout hasn't been inserted, ie. why we don't match on Token::Open.
                         // can't be prefix, so either inf == 0
                         // or post == 0.
                         self.reduce_op(inf + post);
@@ -790,19 +812,14 @@ impl<'a, R: Read> Parser<'a, R> {
         self.lexer.eof()
     }
 
-    pub fn read_term(&mut self, op_dir: CompositeOp) -> Result<Term, ParserError> {
+    pub fn read_term(&mut self, op_dir: CompositeOp) -> Result<Term, ParserError>
+    {                
+        self.tokens = read_tokens(&mut self.lexer)?;
 
-        loop {
-            let token = try!(self.lexer.next_token());
-            let at_end = Token::End == token;
-
-            try!(self.shift_token(token, op_dir));
-
-            if at_end {
-                break;
-            }
+        while let Some(token) = self.tokens.pop() {
+            self.shift_token(token, op_dir)?;
         }
-
+        
         self.reduce_op(1400);
 
         if self.terms.len() > 1 {

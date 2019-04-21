@@ -42,12 +42,12 @@ macro_rules! put_back_n {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Token {
     Constant(Constant),
     Var(Rc<Atom>),
     Open,           // '('
-    OpenCT,         // '/*'
+    OpenCT,         // '('
     Close,          // ')'
     OpenList,       // '['
     CloseList,      // ']'
@@ -553,7 +553,7 @@ impl<'a, R: Read> Lexer<'a, R> {
                     }
                 }
             } else {
-                return Err(ParserError::MissingQuote)
+                return Err(ParserError::InvalidSingleQuotedCharacter)
             }
         } else if self.get_back_quoted_string().is_ok() {
             return Err(ParserError::BackQuotedString);

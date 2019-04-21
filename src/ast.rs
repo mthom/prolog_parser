@@ -341,6 +341,7 @@ pub enum ParserError {
     InvalidRuleHead,
     InvalidUseModuleDecl,
     InvalidModuleResolution,
+    InvalidSingleQuotedCharacter,
     MissingQuote,
     NonPrologChar,
     ParseBigInt,
@@ -385,6 +386,8 @@ impl ParserError {
                 "invalid_head_of_rule",
             &ParserError::InvalidUseModuleDecl =>
                 "invalid_use_module_declaration",
+            &ParserError::InvalidSingleQuotedCharacter =>
+                "invalid_single_quoted_character",
             &ParserError::IO(_) =>
                 "input_output_error",
             &ParserError::MissingQuote =>

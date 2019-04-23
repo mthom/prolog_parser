@@ -724,10 +724,12 @@ impl AsRef<str> for ClauseName {
 }
 
 #[inline]
-fn binary_pow<T>(mut n: T, mut power: BigUint) -> T
+pub fn binary_pow<T>(mut n: T, mut power: BigUint) -> T
     where T: Clone + Mul + One,
     for<'a> T: MulAssign<&'a T>
 {
+    use num::pow;
+    
     if power.is_zero() {
         return T::one();
     }
@@ -740,7 +742,7 @@ fn binary_pow<T>(mut n: T, mut power: BigUint) -> T
             oddand *= &n;
         }
 
-        n = n.clone() * n;
+        n = pow(n, 2);
         power >>= 1;
     }
 

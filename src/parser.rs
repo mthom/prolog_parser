@@ -198,20 +198,20 @@ pub struct Parser<'a, R: Read> {
 fn read_tokens<'a, R: Read>(lexer: &mut Lexer<'a, R>) -> Result<Vec<Token>, ParserError>
 {
     let mut tokens = vec![];
-    
+
     loop {
         let token = lexer.next_token()?;
         let at_end = Token::End == token;
 
         tokens.push(token);
-        
+
         if at_end {
             break;
         }
     }
 
     tokens.reverse();
-    
+
     Ok(tokens)
 }
 
@@ -436,6 +436,10 @@ impl<'a, R: Read> Parser<'a, R> {
                     return false;
                 }
             }
+
+            if arity >= 2 && is_prefix!(self.stack[idx].spec) && self.stack[idx].priority > 0 {
+                return false;
+            }
         } else {
             return false;
         }
@@ -514,7 +518,8 @@ impl<'a, R: Read> Parser<'a, R> {
         None
     }
 
-    fn reduce_list(&mut self) -> Result<bool, ParserError> {
+    fn reduce_list(&mut self) -> Result<bool, ParserError>
+    {
         if self.stack.is_empty() {
             return Ok(false);
         }
@@ -813,13 +818,13 @@ impl<'a, R: Read> Parser<'a, R> {
     }
 
     pub fn read_term(&mut self, op_dir: CompositeOp) -> Result<Term, ParserError>
-    {                
+    {
         self.tokens = read_tokens(&mut self.lexer)?;
 
         while let Some(token) = self.tokens.pop() {
             self.shift_token(token, op_dir)?;
         }
-        
+
         self.reduce_op(1400);
 
         if self.terms.len() > 1 {

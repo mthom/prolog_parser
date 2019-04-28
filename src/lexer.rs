@@ -555,8 +555,11 @@ impl<'a, R: Read> Lexer<'a, R> {
             } else {
                 return Err(ParserError::InvalidSingleQuotedCharacter)
             }
-        } else if self.get_back_quoted_string().is_ok() {
-            return Err(ParserError::BackQuotedString);
+        } else {
+            match self.get_back_quoted_string() {
+                Ok(_)  => return Err(ParserError::BackQuotedString),
+                Err(e) => return Err(e)
+            }
         }
 
         Ok(Token::Constant(atom!(token, self.atom_tbl)))

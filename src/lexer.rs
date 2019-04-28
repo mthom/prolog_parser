@@ -573,6 +573,7 @@ impl<'a, R: Read> Lexer<'a, R> {
         }).or(Err(ParserError::ParseFloat))
     }
 
+    pub
     fn number_token(&mut self) -> Result<Token, ParserError> {
         let mut token = String::new();
 
@@ -710,7 +711,7 @@ impl<'a, R: Read> Lexer<'a, R> {
         }
     }
 
-    fn scan_for_layout(&mut self) -> Result<bool, ParserError> {
+    pub fn scan_for_layout(&mut self) -> Result<bool, ParserError> {
         let mut layout_inserted = false;
         let mut more_layout = true;
 

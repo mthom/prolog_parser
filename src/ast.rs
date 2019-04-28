@@ -324,7 +324,6 @@ pub enum ParserError {
     Arithmetic(ArithmeticError),
     BackQuotedString,
     BadPendingByte,
-    // BuiltInArityMismatch(&'static str),
     CannotParseCyclicTerm,
     UnexpectedChar(char),
     UnexpectedEOF,

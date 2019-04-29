@@ -132,6 +132,11 @@ impl StringList {
     }
 
     #[inline]
+    pub fn char_span(&self, index: usize) -> String {
+        self.borrow()[self.cursor + index ..].chars().collect()
+    }
+
+    #[inline]
     pub fn head(&self) -> Option<char> {
         self.borrow()[self.cursor ..].chars().next()
     }

@@ -460,7 +460,7 @@ impl<'a, R: Read> Lexer<'a, R> {
 
     fn hexadecimal_constant(&mut self) -> Result<BigInt, ParserError> {
         self.skip_char()?;
-
+        
         if hexadecimal_digit_char!(self.lookahead_char()?) {
             let mut s = String::new();
 

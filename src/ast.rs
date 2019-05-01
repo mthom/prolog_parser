@@ -291,6 +291,14 @@ impl DoubleQuotes {
             false
         }
     }
+
+    pub fn is_codes(self) -> bool {
+        if let DoubleQuotes::Codes = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Default for DoubleQuotes {
@@ -728,7 +736,7 @@ pub fn binary_pow<T>(mut n: T, mut power: BigUint) -> T
     for<'a> T: MulAssign<&'a T>
 {
     use num::pow;
-    
+
     if power.is_zero() {
         return T::one();
     }

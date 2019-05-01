@@ -1,3 +1,4 @@
+extern crate lexical;
 extern crate num;
 extern crate ordered_float;
 
@@ -8,4 +9,4 @@ pub mod string_list;
 pub mod parser;
 pub mod put_back_n;
 
-pub mod lexer;
+mod lexer;

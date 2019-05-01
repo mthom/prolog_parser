@@ -1,8 +1,10 @@
+extern crate lexical;
 extern crate num;
 
+use lexical::parse_lossy;
 use num::ToPrimitive;
-use ordered_float::*;
 use num::bigint::BigInt;
+use ordered_float::*;
 
 use ast::*;
 use string_list::*;
@@ -565,12 +567,11 @@ impl<'a, R: Read> Lexer<'a, R> {
         Ok(Token::Constant(atom!(token, self.atom_tbl)))
     }
 
-    fn vacate_with_float(&mut self, mut token: String) -> Result<Token, ParserError> {
+    fn vacate_with_float(&mut self, mut token: String) -> Token {
         self.return_char(token.pop().unwrap());
 
-        token.parse::<f64>().map(|s| {
-            Token::Constant(Constant::Number(Number::Float(OrderedFloat(s))))
-        }).or(Err(ParserError::ParseFloat))
+        let result = Number::Float(OrderedFloat(parse_lossy::<f64, _>(token.as_bytes())));
+        Token::Constant(Constant::Number(result))
     }
 
     pub
@@ -609,12 +610,12 @@ impl<'a, R: Read> Lexer<'a, R> {
                     token.push(self.skip_char()?);
 
                     let c = match self.lookahead_char() {
-                        Err(_) => return self.vacate_with_float(token),
+                        Err(_) => return Ok(self.vacate_with_float(token)),
                         Ok(c) => c
                     };
 
                     if !sign_char!(c) && !decimal_digit_char!(c) {
-                        return self.vacate_with_float(token);
+                        return Ok(self.vacate_with_float(token));
                     }
 
                     if sign_char!(c) {
@@ -623,14 +624,14 @@ impl<'a, R: Read> Lexer<'a, R> {
                         let c = match self.lookahead_char() {
                             Err(_) => {
                                 self.return_char(token.pop().unwrap());
-                                return self.vacate_with_float(token);
+                                return Ok(self.vacate_with_float(token));
                             },
                             Ok(c) => c
                         };
 
                         if !decimal_digit_char!(c) {
                             self.return_char(token.pop().unwrap());
-                            return self.vacate_with_float(token);
+                            return Ok(self.vacate_with_float(token));
                         }
                     }
 
@@ -641,19 +642,18 @@ impl<'a, R: Read> Lexer<'a, R> {
                             token.push(self.skip_char()?);
                         }
 
-                        token.parse::<f64>().map(|s| {
-                            Token::Constant(Constant::Number(Number::Float(OrderedFloat(s))))
-                        }).or(Err(ParserError::ParseFloat))
+                        let n = Number::Float(OrderedFloat(parse_lossy::<f64, _>(token.as_bytes())));
+                        Ok(Token::Constant(Constant::Number(n)))
                     } else {
-                        return self.vacate_with_float(token);
+                        return Ok(self.vacate_with_float(token));
                     }
                 } else {
-                    token.parse::<f64>().map(|s| {
-                        Token::Constant(Constant::Number(Number::Float(OrderedFloat(s))))
-                    }).or(Err(ParserError::ParseFloat))
+                    let n = Number::Float(OrderedFloat(parse_lossy::<f64, _>(token.as_bytes())));
+                    Ok(Token::Constant(Constant::Number(n)))
                 }
             } else {
                 self.return_char('.');
+                
                 let n = BigInt::parse_bytes(token.as_bytes(), 10).ok_or(ParserError::ParseBigInt)?;
                 Ok(Token::Constant(integer!(n)))
             }

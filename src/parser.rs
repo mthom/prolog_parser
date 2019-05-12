@@ -2,6 +2,8 @@ use ast::*;
 use lexer::*;
 use tabled_rc::*;
 
+use ordered_float::OrderedFloat;
+
 use std::cell::Cell;
 use std::io::Read;
 use std::mem::swap;
@@ -727,27 +729,36 @@ impl<'a, R: Read> Parser<'a, R> {
         }
     }
 
+    fn negate_number<N, Negator, ToConstant>(&mut self, n: N, negator: Negator, constr: ToConstant)
+        where Negator: Fn(N) -> N, ToConstant: Fn(N) -> Constant
+    {
+        if let Some(desc) = self.stack.last().cloned() {
+            if let Some(term) = self.terms.last().cloned() {
+                match term {
+                    Term::Constant(_, Constant::Atom(ref name, _))
+                        if name.as_str() == "-" && (is_prefix!(desc.spec) || is_negate!(desc.spec)) => {
+                            self.stack.pop();
+                            self.terms.pop();
+
+                            self.shift(Token::Constant(constr(negator(n))), 0, TERM);
+                            return;
+                        },
+                    _ => {}
+                }
+            }
+        }
+
+        self.shift(Token::Constant(constr(n)), 0, TERM);
+    }
+    
     fn shift_token(&mut self, token: Token, op_dir: CompositeOp) -> Result<(), ParserError> {
         match token {
-            Token::Constant(Constant::Number(n)) => {
-                if let Some(desc) = self.stack.last().cloned() {
-                    if let Some(term) = self.terms.last().cloned() {
-                        match term {
-                            Term::Constant(_, Constant::Atom(ref name, _))
-                                if name.as_str() == "-" && (is_prefix!(desc.spec) || is_negate!(desc.spec)) => {
-                                    self.stack.pop();
-                                    self.terms.pop();
-
-                                    self.shift(Token::Constant(Constant::Number(-n)), 0, TERM);
-                                    return Ok(());
-                                },
-                            _ => {}
-                        }
-                    }
-                }
-
-                self.shift(Token::Constant(Constant::Number(n)), 0, TERM);
-            },
+            Token::Constant(Constant::Integer(n)) =>
+                self.negate_number(n, |n| -n, |n| Constant::Integer(n)),
+            Token::Constant(Constant::Rational(n)) =>
+                self.negate_number(n, |n| -n, |n| Constant::Rational(n)),
+            Token::Constant(Constant::Float(n)) =>
+                self.negate_number(n, |n| OrderedFloat(-n.into_inner()), |n| Constant::Float(n)),
             Token::Constant(c) =>
                 if let Some(name) = self.atomize_constant(&c) {
                     if !self.shift_op(name, op_dir)? {

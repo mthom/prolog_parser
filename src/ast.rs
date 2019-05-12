@@ -1,6 +1,4 @@
-use num::bigint::{BigInt, BigUint};
-use num::{Float, Integer, One, Signed, ToPrimitive, Zero};
-use num::rational::{BigRational, Ratio};
+use rug::{Integer, Rational};
 use ordered_float::*;
 use string_list::*;
 use tabled_rc::*;
@@ -13,7 +11,6 @@ use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::io::{Bytes, Error as IOError, Read};
-use std::ops::{Add, Div, Sub, Mul, MulAssign, Neg};
 use std::rc::Rc;
 use std::str::Utf8Error;
 use std::vec::Vec;
@@ -56,13 +53,6 @@ macro_rules! atom {
     );
     ($e:expr) => (
         Constant::Atom(clause_name!($e), None)
-    )
-}
-
-#[macro_export]
-macro_rules! integer {
-    ($i:expr) => (
-        Constant::Number(Number::Integer(Rc::new(BigInt::from($i))))
     )
 }
 
@@ -484,7 +474,9 @@ pub enum Constant {
     Atom(ClauseName, Option<SharedOpDesc>),
     CharCode(u8),
     Char(char),
-    Number(Number),
+    Integer(Integer),
+    Rational(Rational),
+    Float(OrderedFloat<f64>),
     String(StringList),
     Usize(usize),
     EmptyList
@@ -505,8 +497,12 @@ impl fmt::Display for Constant {
                 write!(f, "{}", c),
             &Constant::EmptyList =>
                 write!(f, "[]"),
-            &Constant::Number(ref n) =>
+            &Constant::Integer(ref n) =>
                 write!(f, "{}", n),
+            &Constant::Rational(ref n) =>
+                write!(f, "{}", n),
+            &Constant::Float(ref n) =>
+                write!(f, "{}", n),            
             &Constant::String(ref s) =>
                 write!(f, "\"{}\"", s.borrow()),
             &Constant::Usize(integer) =>
@@ -529,13 +525,17 @@ impl PartialEq for Constant {
                 c1 == c2,
             (&Constant::CharCode(c1), &Constant::CharCode(c2)) =>
                 c1 == c2,
-            (&Constant::CharCode(c1), &Constant::Number(Number::Integer(ref c2)))
-          | (&Constant::Number(Number::Integer(ref c2)), &Constant::CharCode(c1)) =>
+            (&Constant::CharCode(c1), &Constant::Integer(ref c2))
+          | (&Constant::Integer(ref c2), &Constant::CharCode(c1)) =>
               match c2.to_u8() {
                   Some(c2) => c1 == c2,
                   None => false
               },
-            (&Constant::Number(ref n1), &Constant::Number(ref n2)) =>
+            (&Constant::Integer(ref n1), &Constant::Integer(ref n2)) =>
+                n1 == n2,
+            (&Constant::Rational(ref n1), &Constant::Rational(ref n2)) =>
+                n1 == n2,
+            (&Constant::Float(ref n1), &Constant::Float(ref n2)) =>
                 n1 == n2,
             (&Constant::String(ref s1), &Constant::String(ref s2)) =>
                 s1 == s2,
@@ -556,62 +556,6 @@ impl Constant {
             Constant::Atom(a, _) => Some(a.defrock_brackets()),
             _ => None
         }
-    }
-
-    pub fn to_integer(self) -> Option<Rc<BigInt>> {
-        match self {
-            Constant::Number(Number::Integer(b)) => Some(b),
-            _ => None
-        }
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub enum Number {
-    Float(OrderedFloat<f64>),
-    Integer(Rc<BigInt>),
-    Rational(Rc<Ratio<BigInt>>)
-}
-
-impl PartialOrd for Number {
-    fn partial_cmp(&self, other: &Number) -> Option<Ordering> {
-        match NumberPair::from(self.clone(), other.clone()) {
-            NumberPair::Integer(n1, n2) =>
-                Some(n1.cmp(&n2)),
-            NumberPair::Float(n1, n2) =>
-                Some(n1.cmp(&n2)),
-            NumberPair::Rational(n1, n2) =>
-                Some(n1.cmp(&n2))
-        }
-    }
-}
-
-impl Ord for Number {
-    fn cmp(&self, other: &Number) -> Ordering {
-        match NumberPair::from(self.clone(), other.clone()) {
-            NumberPair::Integer(n1, n2) =>
-                n1.cmp(&n2),
-            NumberPair::Float(n1, n2) =>
-                n1.cmp(&n2),
-            NumberPair::Rational(n1, n2) =>
-                n1.cmp(&n2)
-        }
-    }
-}
-
-impl fmt::Display for Number {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Number::Float(fl) => write!(f, "{}", fl),
-            &Number::Integer(ref bi) => write!(f, "{}", bi),
-            &Number::Rational(ref r) => write!(f, "{}", r)
-        }
-    }
-}
-
-impl Default for Number {
-    fn default() -> Self {
-        Number::Float(OrderedFloat(0f64))
     }
 }
 
@@ -720,323 +664,6 @@ impl AsRef<str> for ClauseName {
     #[inline]
     fn as_ref(self: &Self) -> &str {
         self.as_str()
-    }
-}
-
-#[inline]
-fn binary_pow<T>(mut n: T, mut power: BigUint) -> T
-    where T: Clone + Mul + One,
-    for<'a> T: MulAssign<&'a T>
-{
-    if power.is_zero() {
-        return T::one();
-    }
-
-    let mut oddand = T::one();
-    let one = BigUint::one();
-
-    while power > one {
-        if power.is_odd() {
-            oddand *= &n;
-        }
-
-        n = n.clone() * n;
-        power >>= 1;
-    }
-
-    n * oddand
-}
-
-fn rational_pow(r1: BigRational, r2: BigRational) -> Result<BigRational, ArithmeticError>
-{
-    #[inline]
-    fn to_unsigned(n: &BigInt) -> Result<BigUint, ArithmeticError> {
-        n.abs().to_biguint().ok_or(ArithmeticError::NoRoots)
-    };
-
-    #[inline]
-    fn to_big_rational(n: BigUint) -> BigRational {
-        BigRational::from_integer(BigInt::from(n))
-    };
-
-    let r2 = r2.reduced(); // so that gcd(numer, denom) = 1
-    let n = to_unsigned(r2.denom())?;
-
-    if n == BigUint::one() {
-        return if r2.is_positive() {
-            Ok(binary_pow(r1, to_unsigned(&r2.numer())?))
-        } else if r2.is_negative() {
-            Ok(binary_pow(r1, to_unsigned(&r2.numer())?).recip())
-        } else {
-            Ok(BigRational::one())
-        };
-    }
-
-    if (n.is_even() && r1.is_negative()) || (r2.is_negative() && r1.is_zero()) {
-        return Err(ArithmeticError::NoRoots);
-    }
-
-    let sgn = r1.signum();
-    let r1 = r1 * &sgn; // set r1 to its absolute value.
-
-    let epsilon = BigRational::new_raw(BigInt::one(), BigInt::from(10000));
-    let n1      = n.clone() - BigUint::one(); // n -1
-
-    // 1 + r1 / (n-1) is a good initial point.
-    let mut x_i = BigRational::one() + r1.clone() / to_big_rational(n1.clone());
-    let mut x_i_n1 = binary_pow(x_i.clone(), n1.clone()); // x_i^{n-1}
-    let mut delta_x_i = BigRational::one();
-
-    while delta_x_i.abs() > epsilon {
-        x_i = x_i.reduced();
-        x_i_n1 = x_i_n1.reduced();
-
-        let r_quot = r1.clone() / &x_i_n1; // r1 / x_i^{n-1}
-        let r_n    = to_big_rational(n.clone());
-
-        delta_x_i = ( r_quot - &x_i ) / &r_n;
-
-        x_i += &delta_x_i;
-        x_i_n1 = binary_pow(x_i.clone(), n1.clone());
-    }
-
-    if r2.is_positive() {
-        Ok(binary_pow(sgn * x_i, to_unsigned(r2.numer())?))
-    } else {
-        Ok(binary_pow(sgn * x_i, to_unsigned(r2.numer())?).recip())
-    }
-}
-
-fn pow_float(f1: f64, f2: f64) -> Result<Number, ArithmeticError> {
-    let result = OrderedFloat(f1.powf(f2));
-
-    if result.is_finite() {
-        Ok(Number::Float(result))
-    } else {
-        Err(ArithmeticError::NoRoots)
-    }
-}
-
-fn rational_to_f64(r: &BigRational) -> Option<f64> {
-    match (r.numer().to_f64(), r.denom().to_f64()) {
-        (Some(ref f1), Some(ref f2)) if f2.is_normal() => Some(*f1 / *f2),
-        _ => None
-    }
-}
-
-impl Number {
-    pub fn pow(self, other: Number) -> Result<Self, ArithmeticError> {
-        match NumberPair::from(self, other) {
-            NumberPair::Integer(n1, n2) =>
-                if let Some(n2) = n2.to_biguint() {
-                    Ok(Number::Integer(Rc::new(binary_pow((*n1).clone(), n2))))
-                } else if n1.is_zero() {
-                    Err(ArithmeticError::NoRoots)
-                } else {
-                    let r1 = Ratio::new(BigInt::one(), (*n1).clone());
-                    let n2 = n2.abs().to_biguint().unwrap();
-
-                    Ok(Number::Rational(Rc::new(binary_pow(r1, n2))))
-                },
-            NumberPair::Float(n1, n2) =>
-                pow_float(n1.into_inner(), n2.into_inner()),
-            NumberPair::Rational(r1, r2) => {
-                if let (Some(f1), Some(f2)) = (rational_to_f64(&r1), rational_to_f64(&r2)) {
-                    if let Ok(result) = pow_float(f1, f2) {
-                        return Ok(result);
-                    }
-                }
-
-                let root = rational_pow((*r1).clone(), (*r2).clone())?;
-                Ok(Number::Rational(Rc::new(root)))
-            }
-        }
-    }
-
-    #[inline]
-    pub fn is_zero(&self) -> bool {
-        match self {
-            &Number::Float(fl)       => fl.into_inner().is_zero(),
-            &Number::Integer(ref bi) => bi.is_zero(),
-            &Number::Rational(ref r) => r.is_zero()
-        }
-    }
-
-    #[inline]
-    pub fn is_positive(&self) -> bool {
-        match self {
-            &Number::Float(fl)       => fl.into_inner().is_sign_positive(),
-            &Number::Integer(ref bi) => bi.is_positive(),
-            &Number::Rational(ref r) => r.is_positive()
-        }
-    }
-
-    #[inline]
-    pub fn abs(&self) -> Self {
-        match self {
-            &Number::Float(ref fl)   => Number::Float(OrderedFloat(fl.into_inner().abs())),
-            &Number::Integer(ref n)  => Number::Integer(Rc::new((*n).clone().abs())),
-            &Number::Rational(ref r) => Number::Rational(Rc::new((*r).clone().abs()))
-        }
-    }
-}
-
-pub enum NumberPair {
-    Float(OrderedFloat<f64>, OrderedFloat<f64>),
-    Integer(Rc<BigInt>, Rc<BigInt>),
-    Rational(Rc<Ratio<BigInt>>, Rc<Ratio<BigInt>>)
-}
-
-impl NumberPair {
-    fn flip(self) -> NumberPair {
-        match self {
-            NumberPair::Float(f1, f2)    => NumberPair::Float(f2, f1),
-            NumberPair::Integer(n1, n2)  => NumberPair::Integer(n2, n1),
-            NumberPair::Rational(r1, r2) => NumberPair::Rational(r2, r1)
-        }
-    }
-
-    fn integer_float_pair(n1: Rc<BigInt>, n2: OrderedFloat<f64>) -> NumberPair {
-        match n1.to_f64() {
-            Some(f1) => NumberPair::Float(OrderedFloat(f1), n2),
-            None => if let Some(r) = Ratio::from_float(n2.into_inner()) {
-                NumberPair::Rational(Rc::new(Ratio::from_integer((*n1).clone())),
-                                     Rc::new(r))
-            } else if n2.into_inner().is_sign_positive() {
-                NumberPair::Float(OrderedFloat(f64::infinity()),
-                                  OrderedFloat(f64::infinity()))
-            } else {
-                NumberPair::Float(OrderedFloat(f64::neg_infinity()),
-                                  OrderedFloat(f64::neg_infinity()))
-            }
-        }
-    }
-
-    fn float_rational_pair(n1: OrderedFloat<f64>, n2: Rc<Ratio<BigInt>>) -> NumberPair {
-        match (n2.numer().to_f64(), n2.denom().to_f64()) {
-            (Some(num), Some(denom)) =>
-                NumberPair::Float(n1, OrderedFloat(num / denom)),
-            _ => if let Some(r) = Ratio::from_float(n1.into_inner()) {
-                NumberPair::Rational(Rc::new(r), n2)
-            } else if n1.into_inner().is_sign_positive() {
-                NumberPair::Float(OrderedFloat(f64::infinity()),
-                                  OrderedFloat(f64::infinity()))
-            } else {
-                NumberPair::Float(OrderedFloat(f64::neg_infinity()),
-                                  OrderedFloat(f64::neg_infinity()))
-            }
-        }
-    }
-
-    pub fn from(n1: Number, n2: Number) -> NumberPair
-    {
-        match (n1, n2) {
-            (Number::Integer(n1), Number::Integer(n2)) =>
-                NumberPair::Integer(n1, n2),
-            (Number::Float(n1), Number::Float(n2)) =>
-                NumberPair::Float(n1, n2),
-            (Number::Rational(n1), Number::Rational(n2)) =>
-                NumberPair::Rational(n1, n2),
-            (Number::Integer(n1), Number::Float(n2)) =>
-                Self::integer_float_pair(n1, n2),
-            (Number::Float(n1), Number::Integer(n2)) =>
-                Self::integer_float_pair(n2, n1).flip(),
-            (Number::Float(n1), Number::Rational(n2)) =>
-                Self::float_rational_pair(n1, n2),
-            (Number::Rational(n1), Number::Float(n2)) =>
-                Self::float_rational_pair(n2, n1).flip(),
-            (Number::Rational(n1), Number::Integer(n2)) =>
-                NumberPair::Rational(n1, Rc::new(Ratio::from_integer((*n2).clone()))),
-            (Number::Integer(n1), Number::Rational(n2)) =>
-                NumberPair::Rational(Rc::new(Ratio::from_integer((*n1).clone())), n2)
-        }
-    }
-}
-
-impl Add<Number> for Number {
-    type Output = Number;
-
-    fn add(self, rhs: Number) -> Self::Output {
-        match NumberPair::from(self, rhs) {
-            NumberPair::Float(f1, f2) =>
-                Number::Float(OrderedFloat(f1.into_inner() + f2.into_inner())),
-            NumberPair::Integer(n1, n2) =>
-                Number::Integer(Rc::new(&*n1 + &*n2)),
-            NumberPair::Rational(r1, r2) =>
-                Number::Rational(Rc::new(&*r1 + &*r2))
-        }
-    }
-}
-
-impl Sub<Number> for Number {
-    type Output = Number;
-
-    fn sub(self, rhs: Number) -> Self::Output {
-        match NumberPair::from(self, rhs) {
-            NumberPair::Float(f1, f2) =>
-                Number::Float(OrderedFloat(f1.into_inner() - f2.into_inner())),
-            NumberPair::Integer(n1, n2) =>
-                Number::Integer(Rc::new(&*n1 - &*n2)),
-            NumberPair::Rational(r1, r2) =>
-                Number::Rational(Rc::new(&*r1 - &*r2))
-        }
-    }
-}
-
-impl Mul<Number> for Number {
-    type Output = Number;
-
-    fn mul(self, rhs: Number) -> Self::Output {
-        match NumberPair::from(self, rhs) {
-            NumberPair::Float(f1, f2) =>
-                Number::Float(OrderedFloat(f1.into_inner() * f2.into_inner())),
-            NumberPair::Integer(n1, n2) =>
-                Number::Integer(Rc::new(&*n1 * &*n2)),
-            NumberPair::Rational(r1, r2) =>
-                Number::Rational(Rc::new(&*r1 * &*r2))
-        }
-    }
-}
-
-impl Div<Number> for Number {
-    type Output = Number;
-
-    fn div(self, rhs: Number) -> Self::Output {
-        match NumberPair::from(self, rhs) {
-            NumberPair::Float(f1, f2) =>
-                Number::Float(OrderedFloat(f1.into_inner() / f2.into_inner())),
-            NumberPair::Integer(n1, n2) =>
-                match n1.to_f64() {
-                    Some(f1) => if let Some(f2) = n2.to_f64() {
-                        Number::Float(OrderedFloat(f1 / f2))
-                    } else {
-                        let r1 = Ratio::from_integer((*n1).clone());
-                        let r2 = Ratio::from_integer((*n2).clone());
-
-                        Number::Rational(Rc::new(r1 / r2))
-                    },
-                    None => {
-                        let r1 = Ratio::from_integer((*n1).clone());
-                        let r2 = Ratio::from_integer((*n2).clone());
-
-                        Number::Rational(Rc::new(r1 / r2))
-                    },
-                },
-            NumberPair::Rational(r1, r2) =>
-                Number::Rational(Rc::new(&*r1 / &*r2))
-        }
-    }
-}
-
-impl Neg for Number {
-    type Output = Number;
-
-    fn neg(self) -> Self::Output {
-        match self {
-            Number::Integer(n) => Number::Integer(Rc::new(-&*n)),
-            Number::Float(f) => Number::Float(OrderedFloat(-1.0 * f.into_inner())),
-            Number::Rational(r) => Number::Rational(Rc::new(- &*r))
-        }
     }
 }
 

@@ -1,5 +1,5 @@
-extern crate num;
 extern crate ordered_float;
+extern crate rug;
 
 // external parts (those used directly in rusty-wam)
 #[macro_use] pub mod tabled_rc;

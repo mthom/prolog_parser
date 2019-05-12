@@ -1,5 +1,7 @@
+extern crate lexical;
 extern crate rug;
 
+use lexical::parse_lossy;
 use ordered_float::*;
 use rug::Integer;
 
@@ -350,7 +352,7 @@ impl<'a, R: Read> Lexer<'a, R> {
 
                 if backslash_char!(lac) {
                     self.skip_char()?;
-                    let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt)?;
+                    let n = Integer::from_str_radix(&token, 8).map_err(|_| ParserError::ParseBigInt)?;
                     
                     match n.to_u8() {
                         Some(i) => Ok(char::from(i)),
@@ -390,7 +392,7 @@ impl<'a, R: Read> Lexer<'a, R> {
 
                 if backslash_char!(lac) {
                     self.skip_char()?;
-                    let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt)?;
+                    let n = Integer::from_str_radix(&token, 16).map_err(|_| ParserError::ParseBigInt)?;
 
                     match n.to_u8() {
                         Some(n) => Ok(n as char),
@@ -460,7 +462,7 @@ impl<'a, R: Read> Lexer<'a, R> {
 
     fn hexadecimal_constant(&mut self) -> Result<Integer, ParserError> {
         self.skip_char()?;
-
+        
         if hexadecimal_digit_char!(self.lookahead_char()?) {
             let mut s = String::new();
 
@@ -555,21 +557,24 @@ impl<'a, R: Read> Lexer<'a, R> {
             } else {
                 return Err(ParserError::InvalidSingleQuotedCharacter)
             }
-        } else if self.get_back_quoted_string().is_ok() {
-            return Err(ParserError::BackQuotedString);
+        } else {
+            match self.get_back_quoted_string() {
+                Ok(_)  => return Err(ParserError::BackQuotedString),
+                Err(e) => return Err(e)
+            }
         }
 
         Ok(Token::Constant(atom!(token, self.atom_tbl)))
     }
 
-    fn vacate_with_float(&mut self, mut token: String) -> Result<Token, ParserError> {
+    fn vacate_with_float(&mut self, mut token: String) -> Token {
         self.return_char(token.pop().unwrap());
 
-        token.parse::<f64>().map(|s| {
-            Token::Constant(Constant::Float(OrderedFloat(s)))
-        }).or(Err(ParserError::ParseFloat))
+        let result = OrderedFloat(parse_lossy::<f64, _>(token.as_bytes()));
+        Token::Constant(Constant::Float(result))
     }
 
+    pub
     fn number_token(&mut self) -> Result<Token, ParserError> {
         let mut token = String::new();
 
@@ -605,12 +610,12 @@ impl<'a, R: Read> Lexer<'a, R> {
                     token.push(self.skip_char()?);
 
                     let c = match self.lookahead_char() {
-                        Err(_) => return self.vacate_with_float(token),
+                        Err(_) => return Ok(self.vacate_with_float(token)),
                         Ok(c) => c
                     };
 
                     if !sign_char!(c) && !decimal_digit_char!(c) {
-                        return self.vacate_with_float(token);
+                        return Ok(self.vacate_with_float(token));
                     }
 
                     if sign_char!(c) {
@@ -619,14 +624,14 @@ impl<'a, R: Read> Lexer<'a, R> {
                         let c = match self.lookahead_char() {
                             Err(_) => {
                                 self.return_char(token.pop().unwrap());
-                                return self.vacate_with_float(token);
+                                return Ok(self.vacate_with_float(token));
                             },
                             Ok(c) => c
                         };
 
                         if !decimal_digit_char!(c) {
                             self.return_char(token.pop().unwrap());
-                            return self.vacate_with_float(token);
+                            return Ok(self.vacate_with_float(token));
                         }
                     }
 
@@ -637,16 +642,14 @@ impl<'a, R: Read> Lexer<'a, R> {
                             token.push(self.skip_char()?);
                         }
 
-                        token.parse::<f64>().map(|s| {
-                            Token::Constant(Constant::Float(OrderedFloat(s)))
-                        }).or(Err(ParserError::ParseFloat))
+                        let n = OrderedFloat(parse_lossy::<f64, _>(token.as_bytes()));
+                        Ok(Token::Constant(Constant::Float(n)))
                     } else {
-                        return self.vacate_with_float(token);
+                        return Ok(self.vacate_with_float(token));
                     }
                 } else {
-                    token.parse::<f64>().map(|s| {
-                        Token::Constant(Constant::Float(OrderedFloat(s)))
-                    }).or(Err(ParserError::ParseFloat))
+                    let n = OrderedFloat(parse_lossy::<f64, _>(token.as_bytes()));
+                    Ok(Token::Constant(Constant::Float(n)))
                 }
             } else {
                 self.return_char('.');
@@ -705,7 +708,7 @@ impl<'a, R: Read> Lexer<'a, R> {
         }
     }
 
-    fn scan_for_layout(&mut self) -> Result<bool, ParserError> {
+    pub fn scan_for_layout(&mut self) -> Result<bool, ParserError> {
         let mut layout_inserted = false;
         let mut more_layout = true;
 

@@ -281,6 +281,14 @@ impl DoubleQuotes {
             false
         }
     }
+
+    pub fn is_codes(self) -> bool {
+        if let DoubleQuotes::Codes = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Default for DoubleQuotes {
@@ -301,12 +309,9 @@ pub fn default_op_dir() -> OpDir {
     op_dir
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone)]
 pub enum ArithmeticError {
-    InvalidAtom,
-    InvalidOp,
-    InvalidTerm,
-    NoRoots,
+    NonEvaluableFunctor(Constant, usize),
     UninstantiatedVar
 }
 
@@ -314,7 +319,6 @@ pub enum ParserError {
     Arithmetic(ArithmeticError),
     BackQuotedString,
     BadPendingByte,
-    // BuiltInArityMismatch(&'static str),
     CannotParseCyclicTerm,
     UnexpectedChar(char),
     UnexpectedEOF,
@@ -502,7 +506,7 @@ impl fmt::Display for Constant {
             &Constant::Rational(ref n) =>
                 write!(f, "{}", n),
             &Constant::Float(ref n) =>
-                write!(f, "{}", n),            
+                write!(f, "{}", n),
             &Constant::String(ref s) =>
                 write!(f, "\"{}\"", s.borrow()),
             &Constant::Usize(integer) =>
@@ -551,6 +555,13 @@ impl PartialEq for Constant {
 impl Eq for Constant {}
 
 impl Constant {
+    pub fn to_integer(self) -> Option<Integer> {
+        match self {
+            Constant::Integer(b) => Some(b),
+            _ => None
+        }
+    }
+    
     pub fn to_atom(self) -> Option<ClauseName> {
         match self {
             Constant::Atom(a, _) => Some(a.defrock_brackets()),

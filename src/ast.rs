@@ -12,7 +12,6 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::io::{Bytes, Error as IOError, Read};
 use std::rc::Rc;
-use std::str::Utf8Error;
 use std::vec::Vec;
 
 pub type Atom = String;
@@ -317,17 +316,17 @@ pub enum ArithmeticError {
 
 pub enum ParserError {
     Arithmetic(ArithmeticError),
-    BackQuotedString,
+    BackQuotedString(usize, usize),
     BadPendingByte,
     CannotParseCyclicTerm,
-    UnexpectedChar(char),
+    UnexpectedChar(char, usize, usize),
     UnexpectedEOF,
     IO(IOError),
     ExpectedRel,
     ExpectedTopLevelTerm,
     InadmissibleFact,
     InadmissibleQueryTerm,
-    IncompleteReduction,
+    IncompleteReduction(usize, usize),
     InconsistentEntry,
     InvalidHook,
     InvalidModuleDecl,
@@ -335,24 +334,40 @@ pub enum ParserError {
     InvalidRuleHead,
     InvalidUseModuleDecl,
     InvalidModuleResolution,
-    InvalidSingleQuotedCharacter,
-    MissingQuote,
-    NonPrologChar,
-    ParseBigInt,
-    ParseFloat,
-    Utf8Error
+    InvalidSingleQuotedCharacter(char),
+    MissingQuote(usize, usize),
+    NonPrologChar(usize, usize),
+    ParseBigInt(usize, usize),
+    ParseFloat(usize, usize),
+    Utf8Error(usize, usize)
 }
 
 impl ParserError {
+    pub fn line_and_col_num(&self) -> Option<(usize, usize)> {
+        match self {
+            &ParserError::BackQuotedString(line_num, col_num)
+          | &ParserError::UnexpectedChar(_, line_num, col_num)
+          | &ParserError::IncompleteReduction(line_num, col_num)
+          | &ParserError::MissingQuote(line_num, col_num)
+          | &ParserError::NonPrologChar(line_num, col_num)
+          | &ParserError::ParseBigInt(line_num, col_num)
+          | &ParserError::ParseFloat(line_num, col_num)
+          | &ParserError::Utf8Error(line_num, col_num) =>
+                Some((line_num, col_num)),
+            _ =>
+                None
+        }
+    }
+    
     pub fn as_str(&self) -> &'static str {
         match self {
-            &ParserError::Arithmetic(_) =>
+            &ParserError::Arithmetic(..) =>
                 "arithmetic_error",
-            &ParserError::BackQuotedString =>
+            &ParserError::BackQuotedString(..) =>
                 "back_quoted_string",
             &ParserError::BadPendingByte =>
                 "bad_pending_byte",
-            &ParserError::UnexpectedChar(_) =>
+            &ParserError::UnexpectedChar(..) =>
                 "unexpected_char",
             &ParserError::UnexpectedEOF =>
                 "unexpected_end_of_file",
@@ -364,7 +379,7 @@ impl ParserError {
                 "inadmissible_fact",
             &ParserError::InadmissibleQueryTerm =>
                 "inadmissible_query_term",
-            &ParserError::IncompleteReduction =>
+            &ParserError::IncompleteReduction(..) =>
                 "incomplete_reduction",
             &ParserError::InconsistentEntry =>
                 "inconsistent_entry",
@@ -380,19 +395,19 @@ impl ParserError {
                 "invalid_head_of_rule",
             &ParserError::InvalidUseModuleDecl =>
                 "invalid_use_module_declaration",
-            &ParserError::InvalidSingleQuotedCharacter =>
+            &ParserError::InvalidSingleQuotedCharacter(..) =>
                 "invalid_single_quoted_character",
             &ParserError::IO(_) =>
                 "input_output_error",
-            &ParserError::MissingQuote =>
+            &ParserError::MissingQuote(..) =>
                 "missing_quote",
-            &ParserError::NonPrologChar =>
+            &ParserError::NonPrologChar(..) =>
                 "non_prolog_character",
-            &ParserError::ParseBigInt =>
+            &ParserError::ParseBigInt(..) =>
                 "cannot_parse_big_int",
-            &ParserError::ParseFloat =>
+            &ParserError::ParseFloat(..) =>
                 "cannot_parse_float",
-            &ParserError::Utf8Error =>
+            &ParserError::Utf8Error(..) =>
                 "utf8_conversion_error",
             &ParserError::CannotParseCyclicTerm =>
                 "cannot_parse_cyclic_term"
@@ -409,12 +424,6 @@ impl From<ArithmeticError> for ParserError {
 impl From<IOError> for ParserError {
     fn from(err: IOError) -> ParserError {
         ParserError::IO(err)
-    }
-}
-
-impl From<Utf8Error> for ParserError {
-    fn from(_: Utf8Error) -> ParserError {
-        ParserError::Utf8Error
     }
 }
 

@@ -555,7 +555,8 @@ impl<'a, R: Read> Parser<'a, R> {
 
             match self.terms.pop() {
                 Some(term) => term,
-                _ => return Err(ParserError::IncompleteReduction)
+                _ => return Err(ParserError::IncompleteReduction(self.lexer.line_num,
+                                                                 self.lexer.col_num))
             }
         };
 
@@ -609,7 +610,8 @@ impl<'a, R: Read> Parser<'a, R> {
 
                         let term = match self.terms.pop() {
                             Some(term) => term,
-                            _ => return Err(ParserError::IncompleteReduction)
+                            _ => return Err(ParserError::IncompleteReduction(self.lexer.line_num,
+                                                                             self.lexer.col_num))
                         };
 
                         self.terms.push(Term::Clause(Cell::default(), clause_name!("{}"),
@@ -778,18 +780,21 @@ impl<'a, R: Read> Parser<'a, R> {
             Token::Close  =>
                 if !self.reduce_term(op_dir) {
                     if !self.reduce_brackets() {
-                        return Err(ParserError::IncompleteReduction);
+                        return Err(ParserError::IncompleteReduction(self.lexer.line_num,
+                                                                    self.lexer.col_num));
                     }
                 },
             Token::OpenList  => self.shift(Token::OpenList, 1300, DELIMITER),
             Token::CloseList =>
                 if !self.reduce_list()? {
-                    return Err(ParserError::IncompleteReduction);
+                    return Err(ParserError::IncompleteReduction(self.lexer.line_num,
+                                                                self.lexer.col_num));
                 },
             Token::OpenCurly => self.shift(Token::OpenCurly, 1300, DELIMITER),
             Token::CloseCurly =>
                 if !self.reduce_curly()? {
-                    return Err(ParserError::IncompleteReduction);
+                    return Err(ParserError::IncompleteReduction(self.lexer.line_num,
+                                                                self.lexer.col_num));
                 },
             Token::HeadTailSeparator => {
                 let name = clause_name!("|");
@@ -816,7 +821,8 @@ impl<'a, R: Read> Parser<'a, R> {
                   | Some(TokenType::OpenCurly)
                   | Some(TokenType::HeadTailSeparator)
                   | Some(TokenType::Comma)
-                      => return Err(ParserError::IncompleteReduction),
+                      => return Err(ParserError::IncompleteReduction(self.lexer.line_num,
+                                                                     self.lexer.col_num)),
                     _ => {}
                 }
         }
@@ -839,16 +845,16 @@ impl<'a, R: Read> Parser<'a, R> {
         self.reduce_op(1400);
 
         if self.terms.len() > 1 {
-            return Err(ParserError::IncompleteReduction);
+            return Err(ParserError::IncompleteReduction(self.lexer.line_num, self.lexer.col_num));
         }
 
         match self.terms.pop() {
             Some(term) => if self.terms.is_empty() {
                 Ok(term)
             } else {
-                Err(ParserError::IncompleteReduction)
+                Err(ParserError::IncompleteReduction(self.lexer.line_num, self.lexer.col_num))
             },
-            _ => Err(ParserError::IncompleteReduction)
+            _ => Err(ParserError::IncompleteReduction(self.lexer.line_num, self.lexer.col_num))
         }
     }
 

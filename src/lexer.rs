@@ -28,7 +28,7 @@ macro_rules! consume_chars_with {
             match $e {
                 Ok(Some(c)) => $token.push(c),
                 Ok(None) => continue,
-                Err(ParserError::UnexpectedChar(_)) => break,
+                Err(ParserError::UnexpectedChar(..)) => break,
                 Err(e) => return Err(e)
             }
         }
@@ -63,18 +63,20 @@ pub struct Lexer<'a, R: Read> {
     pub(crate) atom_tbl: TabledData<Atom>,
     pub(crate) reader: &'a mut ParsingStream<R>,
     flags: MachineFlags,
-    line_num: usize,
+    pub(crate) line_num: usize,
+    pub(crate) col_num: usize
 }
 
 impl<'a, R: Read> Lexer<'a, R> {
     pub fn new(atom_tbl: TabledData<Atom>, flags: MachineFlags, src: &'a mut ParsingStream<R>) -> Self
     {
-        Lexer { atom_tbl, flags, reader: src, line_num: 0 }
+        Lexer { atom_tbl, flags, reader: src, line_num: 0, col_num: 0 }
     }
 
     fn return_char(&mut self, c: char) {
         if new_line_char!(c) {
             self.line_num -= 1;
+            self.col_num = 0;
         }
 
         self.reader.put_back(Ok(c as u8));
@@ -82,8 +84,11 @@ impl<'a, R: Read> Lexer<'a, R> {
 
     fn skip_char(&mut self) -> Result<char, ParserError> {
         if let Some(Ok(c)) = self.reader.next() {
+            self.col_num += 1;
+
             if new_line_char!(c as char) {
                 self.line_num += 1;
+                self.col_num = 0;
             }
 
             Ok(c as char)
@@ -161,7 +166,7 @@ impl<'a, R: Read> Lexer<'a, R> {
                     self.skip_char()?;
                     Ok(true)
                 } else {
-                    Err(ParserError::NonPrologChar)
+                    Err(ParserError::NonPrologChar(self.line_num, self.col_num))
                 }
             } else {
                 self.return_char(c);
@@ -178,7 +183,7 @@ impl<'a, R: Read> Lexer<'a, R> {
 
             if !back_quote_char!(self.lookahead_char()?) {
                 self.return_char(c);
-                Err(ParserError::UnexpectedChar(c))
+                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
             } else {
                 self.skip_char()
             }
@@ -198,7 +203,7 @@ impl<'a, R: Read> Lexer<'a, R> {
                 Ok(None)
             } else {
                 self.return_char(c);
-                Err(ParserError::UnexpectedChar(c))
+                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
             }
         } else {
             self.get_back_quoted_char().map(Some)
@@ -218,10 +223,10 @@ impl<'a, R: Read> Lexer<'a, R> {
                 self.skip_char()?;
                 Ok(token)
             } else {
-                Err(ParserError::MissingQuote)
+                Err(ParserError::MissingQuote(self.line_num, self.col_num))
             }
         } else {
-            Err(ParserError::UnexpectedChar(c))
+            Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
         }
     }
 
@@ -249,7 +254,7 @@ impl<'a, R: Read> Lexer<'a, R> {
 
             if !single_quote_char!(self.lookahead_char()?) {
                 self.return_char(c);
-                Err(ParserError::UnexpectedChar(c))
+                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
             } else {
                 self.skip_char()
             }
@@ -281,7 +286,7 @@ impl<'a, R: Read> Lexer<'a, R> {
 
             if !double_quote_char!(self.lookahead_char()?) {
                 self.return_char(c);
-                Err(ParserError::UnexpectedChar(c))
+                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
             } else {
                 self.skip_char()
             }
@@ -302,10 +307,10 @@ impl<'a, R: Read> Lexer<'a, R> {
                 self.skip_char()
             } else {
                 self.return_char(c);
-                Err(ParserError::UnexpectedChar(c))
+                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
             }
         } else {
-            Err(ParserError::UnexpectedChar(self.lookahead_char()?))
+            Err(ParserError::UnexpectedChar(self.lookahead_char()?, self.line_num, self.col_num))
         }
     }
 
@@ -323,14 +328,14 @@ impl<'a, R: Read> Lexer<'a, R> {
                     't' => Ok('\t'),
                     'n' => Ok('\n'),
                     'r' => Ok('\r'),
-                    c   => Err(ParserError::UnexpectedChar(c))
+                    c   => Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
                 }
             } else {
                 self.return_char(c);
-                Err(ParserError::UnexpectedChar(c))
+                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
             }
         } else {
-            Err(ParserError::UnexpectedChar(self.lookahead_char()?))
+            Err(ParserError::UnexpectedChar(self.lookahead_char()?, self.line_num, self.col_num))
         }
     }
 
@@ -352,23 +357,24 @@ impl<'a, R: Read> Lexer<'a, R> {
 
                 if backslash_char!(lac) {
                     self.skip_char()?;
-                    let n = Integer::from_str_radix(&token, 8).map_err(|_| ParserError::ParseBigInt)?;
+                    let n = Integer::from_str_radix(&token, 8)
+                          .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
                     
                     match n.to_u8() {
                         Some(i) => Ok(char::from(i)),
-                        _ => Err(ParserError::ParseBigInt)
+                        _ => Err(ParserError::ParseBigInt(self.line_num, self.col_num))
                     }
                 } else {
                     put_back_n!(self, token);
                     self.return_char(c);
-                    Err(ParserError::UnexpectedChar(lac))
+                    Err(ParserError::UnexpectedChar(lac, self.line_num, self.col_num))
                 }
             } else {
                 self.return_char(c);
-                Err(ParserError::UnexpectedChar(c))
+                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
             }
         } else {
-            Err(ParserError::UnexpectedChar(self.lookahead_char()?))
+            Err(ParserError::UnexpectedChar(self.lookahead_char()?, self.line_num, self.col_num))
         }
     }
 
@@ -392,11 +398,12 @@ impl<'a, R: Read> Lexer<'a, R> {
 
                 if backslash_char!(lac) {
                     self.skip_char()?;
-                    let n = Integer::from_str_radix(&token, 16).map_err(|_| ParserError::ParseBigInt)?;
+                    let n = Integer::from_str_radix(&token, 16)
+                            .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
 
                     match n.to_u8() {
                         Some(n) => Ok(n as char),
-                        _ => Err(ParserError::ParseBigInt)
+                        _ => Err(ParserError::ParseBigInt(self.line_num, self.col_num))
                     }
                 } else {
                     put_back_n!(self, token);
@@ -404,14 +411,14 @@ impl<'a, R: Read> Lexer<'a, R> {
                     self.return_char(hex_char);
                     self.return_char(c);
 
-                    Err(ParserError::UnexpectedChar(lac))
+                    Err(ParserError::UnexpectedChar(lac, self.line_num, self.col_num))
                 }
             } else {
                 self.return_char(c);
-                Err(ParserError::UnexpectedChar(c))
+                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
             }
         } else {
-            Err(ParserError::UnexpectedChar(self.lookahead_char()?))
+            Err(ParserError::UnexpectedChar(self.lookahead_char()?, self.line_num, self.col_num))
         }
     }
 
@@ -423,21 +430,21 @@ impl<'a, R: Read> Lexer<'a, R> {
         } else {
             self.get_meta_escape_sequence()
                 .or_else(|e| {
-                    if let ParserError::UnexpectedChar(_) = e {
+                    if let ParserError::UnexpectedChar(..) = e {
                         self.get_control_escape_sequence()
                     } else {
                         Err(e)
                     }
                 })
                 .or_else(|e| {
-                    if let ParserError::UnexpectedChar(_) = e {
+                    if let ParserError::UnexpectedChar(..) = e {
                         self.get_octal_escape_sequence()
                     } else {
                         Err(e)
                     }
                 })
                 .or_else(|e| {
-                    if let ParserError::UnexpectedChar(_) = e {
+                    if let ParserError::UnexpectedChar(..) = e {
                         self.get_hexadecimal_escape_sequence()
                     } else {
                         Err(e)
@@ -456,7 +463,7 @@ impl<'a, R: Read> Lexer<'a, R> {
             self.skip_char()?;
             Ok(token)
         } else {
-            Err(ParserError::MissingQuote)
+            Err(ParserError::MissingQuote(self.line_num, self.col_num))
         }
     }
 
@@ -470,10 +477,11 @@ impl<'a, R: Read> Lexer<'a, R> {
                 s.push(self.skip_char()?);
             }
 
-            Ok(Integer::from_str_radix(&s, 16).map_err(|_| ParserError::ParseBigInt)?)
+            Ok(Integer::from_str_radix(&s, 16)
+               .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
         } else {
             self.return_char('x');
-            Err(ParserError::ParseBigInt)
+            Err(ParserError::ParseBigInt(self.line_num, self.col_num))
         }
     }
 
@@ -487,10 +495,11 @@ impl<'a, R: Read> Lexer<'a, R> {
                 s.push(self.skip_char()?);
             }
 
-            Ok(Integer::from_str_radix(&s, 8).map_err(|_| ParserError::ParseBigInt)?)
+            Ok(Integer::from_str_radix(&s, 8)
+               .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
         } else {
             self.return_char('o');
-            Err(ParserError::ParseBigInt)
+            Err(ParserError::ParseBigInt(self.line_num, self.col_num))
         }
     }
 
@@ -504,10 +513,11 @@ impl<'a, R: Read> Lexer<'a, R> {
                 s.push(self.skip_char()?);
             }
 
-            Ok(Integer::from_str_radix(&s, 2).map_err(|_| ParserError::ParseBigInt)?)
+            Ok(Integer::from_str_radix(&s, 2)
+               .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
         } else {
             self.return_char('b');
-            Err(ParserError::ParseBigInt)
+            Err(ParserError::ParseBigInt(self.line_num, self.col_num))
         }
     }
 
@@ -555,11 +565,11 @@ impl<'a, R: Read> Lexer<'a, R> {
                     }
                 }
             } else {
-                return Err(ParserError::InvalidSingleQuotedCharacter)
+                return Err(ParserError::InvalidSingleQuotedCharacter(self.lookahead_char()?))
             }
         } else {
             match self.get_back_quoted_string() {
-                Ok(_)  => return Err(ParserError::BackQuotedString),
+                Ok(_)  => return Err(ParserError::BackQuotedString(self.line_num, self.col_num)),
                 Err(e) => return Err(e)
             }
         }
@@ -592,7 +602,8 @@ impl<'a, R: Read> Lexer<'a, R> {
 
             if self.reader.peek().is_none() {
                 self.return_char('.');
-                let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt)?;
+                let n = token.parse::<Integer>()
+                       .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
                 Ok(Token::Constant(Constant::Integer(n)))
             } else if decimal_digit_char!(self.lookahead_char()?) {
                 token.push('.');
@@ -653,7 +664,8 @@ impl<'a, R: Read> Lexer<'a, R> {
                 }
             } else {
                 self.return_char('.');
-                let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt)?;
+                let n = token.parse::<Integer>()
+                        .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
                 Ok(Token::Constant(Constant::Integer(n)))
             }
         } else {
@@ -661,9 +673,9 @@ impl<'a, R: Read> Lexer<'a, R> {
                 if c == 'x' {
                     Ok(Token::Constant(Constant::Integer(self.hexadecimal_constant()
                                                              .or_else(|e| {
-                                                                 if let ParserError::ParseBigInt = e {
+                                                                 if let ParserError::ParseBigInt(..) = e {
                                                                      Ok(token.parse::<Integer>()
-                                                                        .map_err(|_| ParserError::ParseBigInt)?)
+                                                                        .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
                                                                  } else {
                                                                      Err(e)
                                                                  }
@@ -671,9 +683,9 @@ impl<'a, R: Read> Lexer<'a, R> {
                 } else if c == 'o' {
                     Ok(Token::Constant(Constant::Integer(self.octal_constant()
                                                              .or_else(|e| {
-                                                                 if let ParserError::ParseBigInt = e {
+                                                                 if let ParserError::ParseBigInt(..) = e {
                                                                      Ok(token.parse::<Integer>()
-                                                                        .map_err(|_| ParserError::ParseBigInt)?)
+                                                                        .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
                                                                  } else {
                                                                      Err(e)
                                                                  }
@@ -681,9 +693,9 @@ impl<'a, R: Read> Lexer<'a, R> {
                 } else if c == 'b' {
                     Ok(Token::Constant(Constant::Integer(self.binary_constant()
                                                              .or_else(|e| {
-                                                                 if let ParserError::ParseBigInt = e {
+                                                                 if let ParserError::ParseBigInt(..) = e {
                                                                      Ok(token.parse::<Integer>()
-                                                                        .map_err(|_| ParserError::ParseBigInt)?)
+                                                                        .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
                                                                  } else {
                                                                      Err(e)
                                                                  }
@@ -694,15 +706,15 @@ impl<'a, R: Read> Lexer<'a, R> {
                         .map(|c| Token::Constant(Constant::CharCode(c as u8)))
                         .or_else(|_| {
                             self.return_char(c);
-                            let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt)?;
+                            let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
                             Ok(Token::Constant(Constant::Integer(n)))
                         })
                 } else {
-                    let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt)?;
+                    let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
                     Ok(Token::Constant(Constant::Integer(n)))
                 }
             } else {
-                let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt)?;
+                let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
                 Ok(Token::Constant(Constant::Integer(n)))
             }
         }

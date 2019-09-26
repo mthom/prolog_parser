@@ -786,6 +786,23 @@ impl<'a, R: Read> Lexer<'a, R> {
                         Ok(c) if layout_char!(c) || c == '%' => {
                             if new_line_char!(c) {
                                 self.skip_char()?;
+                            } else {
+                                while let Ok(c) = self.lookahead_char() {
+                                    if new_line_char!(c) {
+                                        break;
+                                    }
+
+                                    if layout_char!(c) {
+                                        self.skip_char()?;
+                                        continue;
+                                    }
+
+                                    if c == '%' {
+                                        self.single_line_comment()?;
+                                    }
+
+                                    break;
+                                }
                             }
 
                             return Ok(Token::End);

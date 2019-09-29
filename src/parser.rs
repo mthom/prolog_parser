@@ -485,8 +485,13 @@ impl<'a, R: Read> Parser<'a, R> {
         false
     }
 
+    pub fn devour_whitespace(&mut self) -> Result<(), ParserError> {
+	self.lexer.scan_for_layout()?;
+	Ok(())
+    }
+
     pub fn reset(&mut self) {
-        self.stack.clear();
+        self.stack.clear()
     }
 
     fn compute_arity_in_list(&self) -> Option<usize>

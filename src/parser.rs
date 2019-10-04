@@ -228,6 +228,16 @@ impl<'a, R: Read> Parser<'a, R> {
     }
 
     #[inline]
+    pub fn line_num(&self) -> usize {
+        self.lexer.line_num
+    }
+
+    #[inline]
+    pub fn col_num(&self) -> usize {
+        self.lexer.col_num
+    }
+    
+    #[inline]
     pub fn get_atom_tbl(&self) -> TabledData<Atom> {
         self.lexer.atom_tbl.clone()
     }

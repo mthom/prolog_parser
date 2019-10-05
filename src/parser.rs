@@ -266,7 +266,7 @@ impl<'a, R: Read> Parser<'a, R> {
                     _ => None
                 },
             _ => None
-            }
+        }
     }
 
     fn push_binary_op(&mut self, td: TokenDesc, spec: Specifier)

@@ -476,9 +476,13 @@ impl SharedOpDesc {
     }
 }
 
+// this ensures that SharedOpDesc (which is not consistently placed in
+// every atom!) doesn't affect the value of an atom hash. If
+// SharedOpDesc values are to be indexed, a BTreeMap or BTreeSet
+// should be used, obviously.
 impl Hash for SharedOpDesc {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.get().hash(state);
+        0.hash(state)
     }
 }
 

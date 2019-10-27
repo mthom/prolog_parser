@@ -20,7 +20,7 @@ pub type Var = String;
 
 pub type Specifier = u32;
 
-pub const MAX_ARITY: usize = 255;
+pub const MAX_ARITY: usize = 511;
 
 pub const XFX: u32 = 0x0001;
 pub const XFY: u32 = 0x0002;

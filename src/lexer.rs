@@ -1,6 +1,3 @@
-extern crate lexical;
-extern crate rug;
-
 use lexical::parse_lossy;
 use ordered_float::*;
 use rug::Integer;

@@ -724,6 +724,41 @@ impl Term {
         }
     }
 
+    pub fn predicate_name(&self) -> Option<ClauseName> {
+        match self {
+            Term::Clause(_, ref name, ref terms, _) => // a rule.
+                if name.as_str() == ":-" {
+                    match terms.len() {
+                        1 => None,
+                        2 => terms[0].name(),
+                        _ => Some(clause_name!(":-"))
+                    }
+                } else {
+                    Some(name.clone()) // a fact.
+                },
+            Term::Constant(_, Constant::Atom(ref atom, _)) => {
+                Some(atom.clone())
+            }
+            _ => None
+        }
+    }
+
+    pub fn predicate_arity(&self) -> usize {
+        match self {
+            Term::Clause(_, ref name, ref terms, _) => // a rule.
+                if name.as_str() == ":-" {
+                    match terms.len() {
+                        1 => 0,
+                        2 => terms[0].arity(),
+                        _ => terms.len()
+                    }
+                } else {
+                    terms.len() // a fact.
+                },
+            _ => 0
+        }
+    }
+    
     pub fn name(&self) -> Option<ClauseName> {
         match self {
             &Term::Constant(_, Constant::Atom(ref atom, _))

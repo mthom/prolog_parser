@@ -491,6 +491,7 @@ pub enum Constant {
     Atom(ClauseName, Option<SharedOpDesc>),
     CharCode(u8),
     Char(char),
+    CutPoint(usize),
     Integer(Integer),
     Rational(Rational),
     Float(OrderedFloat<f64>),
@@ -512,6 +513,8 @@ impl fmt::Display for Constant {
                 write!(f, "'{}'", c as u8),
             &Constant::CharCode(c) =>
                 write!(f, "{}", c),
+            &Constant::CutPoint(b) =>
+                write!(f, "{}", b),
             &Constant::EmptyList =>
                 write!(f, "[]"),
             &Constant::Integer(ref n) =>

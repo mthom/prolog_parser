@@ -18,6 +18,13 @@ impl<T> Clone for TabledData<T> {
     }
 }
 
+impl<T: PartialEq> PartialEq for TabledData<T> {
+    fn eq(&self, other: &TabledData<T>) -> bool
+    {
+        Rc::ptr_eq(&self.table, &other.table) && self.module_name == other.module_name
+    }
+}
+
 impl<T: Hash + Eq> TabledData<T> {
     #[inline]
     pub fn new(module_name: Rc<String>) -> Self {

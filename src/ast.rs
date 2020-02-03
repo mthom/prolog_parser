@@ -358,7 +358,7 @@ impl ParserError {
                 None
         }
     }
-    
+
     pub fn as_str(&self) -> &'static str {
         match self {
             &ParserError::Arithmetic(..) =>
@@ -577,7 +577,7 @@ impl Constant {
             _ => None
         }
     }
-    
+
     pub fn to_atom(self) -> Option<ClauseName> {
         match self {
             Constant::Atom(a, _) => Some(a.defrock_brackets()),
@@ -636,8 +636,8 @@ impl ClauseName {
         match self {
             &ClauseName::User(ref name) => {
                 let module = name.owning_module();
-                 ClauseName::User(TabledRc { atom: module.clone(),
-                                             table: TabledData::new(module) })
+                ClauseName::User(TabledRc { atom: module.clone(),
+                                            table: TabledData::new(module) })
             },
             _ => clause_name!("user")
         }
@@ -662,6 +662,31 @@ impl ClauseName {
         }
     }
 
+    #[inline]
+    pub fn has_table(&self, atom_tbl: &TabledData<Atom>) -> bool {
+        match self {
+            ClauseName::BuiltIn(_) => false,
+            ClauseName::User(ref name) => &name.table == atom_tbl,
+        }
+    }
+
+    #[inline]
+    pub fn has_table_of(&self, other: &ClauseName) -> bool {
+        match self {
+            ClauseName::BuiltIn(_) => {
+                if let ClauseName::BuiltIn(_) = other {
+                    true
+                } else {
+                    false
+                }
+            }
+            ClauseName::User(ref name) => {
+                other.has_table(&name.table)
+            }
+        }
+    }
+
+    #[inline]
     pub fn as_str(&self) -> &str {
         match self {
             &ClauseName::BuiltIn(s) => s,
@@ -727,41 +752,16 @@ impl Term {
         }
     }
 
-    pub fn predicate_name(&self) -> Option<ClauseName> {
+    pub fn set_name(&mut self, new_name: ClauseName) {
         match self {
-            Term::Clause(_, ref name, ref terms, _) => // a rule.
-                if name.as_str() == ":-" {
-                    match terms.len() {
-                        1 => None,
-                        2 => terms[0].name(),
-                        _ => Some(clause_name!(":-"))
-                    }
-                } else {
-                    Some(name.clone()) // a fact.
-                },
-            Term::Constant(_, Constant::Atom(ref atom, _)) => {
-                Some(atom.clone())
+            Term::Constant(_, Constant::Atom(ref mut atom, _))
+          | Term::Clause(_, ref mut atom, ..) => {
+              *atom = new_name;
             }
-            _ => None
+            _ => {}
         }
     }
 
-    pub fn predicate_arity(&self) -> usize {
-        match self {
-            Term::Clause(_, ref name, ref terms, _) => // a rule.
-                if name.as_str() == ":-" {
-                    match terms.len() {
-                        1 => 0,
-                        2 => terms[0].arity(),
-                        _ => terms.len()
-                    }
-                } else {
-                    terms.len() // a fact.
-                },
-            _ => 0
-        }
-    }
-    
     pub fn name(&self) -> Option<ClauseName> {
         match self {
             &Term::Constant(_, Constant::Atom(ref atom, _))

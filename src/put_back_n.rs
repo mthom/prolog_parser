@@ -19,16 +19,6 @@ pub fn put_back_n<I>(iterable: I) -> PutBackN<I::IntoIter>
 
 impl<I: Iterator> PutBackN<I> {
     #[inline]
-    pub fn extend<Iter: Iterator<Item=I::Item>>(&mut self, iter: Iter) {
-        let mut buf: Vec<_> = iter.collect();
-        buf.reverse();
-
-        for i in buf {
-            self.top.push(i);
-        }
-    }
-
-    #[inline]
     pub fn put_back(&mut self, item: I::Item) {
         self.top.push(item);
     }

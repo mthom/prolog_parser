@@ -76,19 +76,19 @@ impl<'a, R: Read> Lexer<'a, R> {
             self.col_num = 0;
         }
 
-        self.reader.put_back(Ok(c as u8));
+        self.reader.put_back(Ok(c));
     }
 
     fn skip_char(&mut self) -> Result<char, ParserError> {
         if let Some(Ok(c)) = self.reader.next() {
             self.col_num += 1;
 
-            if new_line_char!(c as char) {
+            if new_line_char!(c) {
                 self.line_num += 1;
                 self.col_num = 0;
             }
 
-            Ok(c as char)
+            Ok(c)
         } else {
             Err(ParserError::UnexpectedEOF)
         }
@@ -116,8 +116,8 @@ impl<'a, R: Read> Lexer<'a, R> {
 
     pub fn lookahead_char(&mut self) -> Result<char, ParserError> {
         match self.reader.peek() {
-            Some(&Ok(b)) => Ok(b as char),
-            _ => Err(ParserError::UnexpectedEOF)
+            Some(&Ok(c)) => Ok(c),
+            _ => Err(ParserError::UnexpectedEOF),
         }
     }
 

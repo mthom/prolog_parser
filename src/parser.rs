@@ -247,11 +247,6 @@ impl<'a, R: Read> Parser<'a, R> {
         self.lexer.atom_tbl = atom_tbl;
     }
 
-    #[inline]
-    pub fn add_to_top(&mut self, head: &str) {
-        self.lexer.reader.extend(head.as_bytes().iter().map(|&b| Ok(b)));
-    }
-
     fn get_term_name(&mut self, tt: TokenType) -> Option<(ClauseName, Option<SharedOpDesc>)> {
         match tt {
             TokenType::Comma => Some((clause_name!(","), Some(SharedOpDesc::new(1000, XFY)))),

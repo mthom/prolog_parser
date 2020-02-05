@@ -4,6 +4,7 @@ extern crate ordered_float;
 extern crate rug;
 #[cfg(feature = "num-rug-adapter")]
 extern crate num_rug_adapter as rug;
+extern crate unicode_reader;
 
 #[macro_use] pub mod tabled_rc;
 #[macro_use] pub mod ast;

@@ -14,6 +14,8 @@ use std::io::{Bytes, Error as IOError, Read};
 use std::rc::Rc;
 use std::vec::Vec;
 
+use unicode_reader::CodePoints;
+
 pub type Atom = String;
 
 pub type Var = String;
@@ -811,9 +813,9 @@ impl<'a, 'b> CompositeOp<'a, 'b>
     }
 }
 
-pub type ParsingStream<R> = PutBackN<Bytes<R>>;
+pub type ParsingStream<R> = PutBackN<CodePoints<Bytes<R>>>;
 
 #[inline]
 pub fn parsing_stream<R: Read>(src: R) -> ParsingStream<R> {
-    put_back_n(src.bytes())
+    put_back_n(CodePoints::from(src.bytes()))
 }

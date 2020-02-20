@@ -6,7 +6,7 @@ macro_rules! char_class {
 
 #[macro_export]
 macro_rules! symbolic_control_char {
-    ($c: expr) => (char_class!($c, ['a', 'b', 'f', 'n', 'r', 't', 'v']))
+    ($c: expr) => (char_class!($c, ['a', 'b', 'f', 'n', 'r', 't', 'v', '0']))
 }
 
 #[macro_export]

@@ -3,7 +3,6 @@ use ordered_float::*;
 use rug::Integer;
 
 use ast::*;
-use string_list::*;
 use tabled_rc::*;
 
 use std::io::Read;
@@ -322,9 +321,10 @@ impl<'a, R: Read> Lexer<'a, R> {
                     'b' => Ok('\u{08}'), // UTF-8 backspace
                     'v' => Ok('\u{0b}'), // UTF-8 vertical tab
                     'f' => Ok('\u{0c}'), // UTF-8 form feed
+                    '0' => Ok('\u{0}'),  // UTF-8 null char code point
                     't' => Ok('\t'),
                     'n' => Ok('\n'),
-                    'r' => Ok('\r'),
+                    'r' => Ok('\r'),                    
                     c   => Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
                 }
             } else {
@@ -700,7 +700,7 @@ impl<'a, R: Read> Lexer<'a, R> {
                 } else if single_quote_char!(c) {
                     self.skip_char()?;
                     self.get_single_quoted_char()
-                        .map(|c| Token::Constant(Constant::CharCode(c as u8)))
+                        .map(|c| Token::Constant(Constant::CharCode(c as u32)))
                         .or_else(|_| {
                             self.return_char(c);
                             let n = token.parse::<Integer>().map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
@@ -726,15 +726,15 @@ impl<'a, R: Read> Lexer<'a, R> {
 
             match cr {
                 Ok(c) if layout_char!(c) => {
-                    try!(self.skip_char());
+                    self.skip_char()?;
                     layout_inserted = true;
                 },
                 Ok(c) if c == '%' => {
-                    try!(self.single_line_comment());
+                    self.single_line_comment()?;
                     layout_inserted = true;
                 },
                 Ok(c) if c == '/' =>
-                    if try!(self.bracketed_comment()) {
+                    if self.bracketed_comment()? {
                         layout_inserted = true;
                     } else {
                         more_layout = false;
@@ -751,7 +751,7 @@ impl<'a, R: Read> Lexer<'a, R> {
     }
 
     pub fn next_token(&mut self) -> Result<Token, ParserError> {
-        let layout_inserted = try!(self.scan_for_layout());
+        let layout_inserted = self.scan_for_layout()?;
         let cr = self.lookahead_char();
 
         match cr {
@@ -761,17 +761,17 @@ impl<'a, R: Read> Lexer<'a, R> {
                 }
 
                 if c == ',' {
-                    try!(self.skip_char());
+                    self.skip_char()?;
                     return Ok(Token::Comma);
                 }
 
                 if c == ')' {
-                    try!(self.skip_char());
+                    self.skip_char()?;
                     return Ok(Token::Close);
                 }
 
                 if c == '(' {
-                    try!(self.skip_char());
+                    self.skip_char()?;
                     return Ok(if layout_inserted { Token::Open }
                               else { Token::OpenCT });
                 }
@@ -804,27 +804,27 @@ impl<'a, R: Read> Lexer<'a, R> {
                 }
 
                 if c == ']' {
-                    try!(self.skip_char());
+                    self.skip_char()?;
                     return Ok(Token::CloseList);
                 }
 
                 if c == '[' {
-                    try!(self.skip_char());
+                    self.skip_char()?;
                     return Ok(Token::OpenList);
                 }
 
                 if c == '|' {
-                    try!(self.skip_char());
+                    self.skip_char()?;
                     return Ok(Token::HeadTailSeparator);
                 }
 
                 if c == '{' {
-                    try!(self.skip_char());
+                    self.skip_char()?;
                     return Ok(Token::OpenCurly);
                 }
 
                 if c == '}' {
-                    try!(self.skip_char());
+                    self.skip_char()?;
                     return Ok(Token::CloseCurly);
                 }
 
@@ -834,9 +834,9 @@ impl<'a, R: Read> Lexer<'a, R> {
                     if let DoubleQuotes::Atom = self.flags.double_quotes {
                         let s = clause_name!(s, self.atom_tbl);
                         return Ok(Token::Constant(Constant::Atom(s, None)));
-                    } else { // for now.. == DoubleQuotes::Chars
-                        let s = StringList::new(s, false);
-                        return Ok(Token::Constant(Constant::String(s)));
+                    } else {
+                        let s = Rc::new(s);
+                        return Ok(Token::Constant(Constant::String(0, s)));
                     }
                 }
 

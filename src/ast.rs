@@ -1,6 +1,5 @@
 use rug::{Integer, Rational};
 use ordered_float::*;
-use string_list::*;
 use tabled_rc::*;
 
 use put_back_n::*;
@@ -491,13 +490,13 @@ impl Hash for SharedOpDesc {
 #[derive(Clone, Hash)]
 pub enum Constant {
     Atom(ClauseName, Option<SharedOpDesc>),
-    CharCode(u8),
     Char(char),
+    CharCode(u32),
     CutPoint(usize),
     Integer(Integer),
     Rational(Rational),
     Float(OrderedFloat<f64>),
-    String(StringList),
+    String(usize, Rc<String>),
     Usize(usize),
     EmptyList
 }
@@ -512,7 +511,7 @@ impl fmt::Display for Constant {
                     write!(f, "{}", atom.as_str())
                 },
             &Constant::Char(c) =>
-                write!(f, "'{}'", c as u8),
+                write!(f, "'{}'", c as u32),
             &Constant::CharCode(c) =>
                 write!(f, "{}", c),
             &Constant::CutPoint(b) =>
@@ -525,10 +524,10 @@ impl fmt::Display for Constant {
                 write!(f, "{}", n),
             &Constant::Float(ref n) =>
                 write!(f, "{}", n),
-            &Constant::String(ref s) =>
-                write!(f, "\"{}\"", s.borrow()),
+            &Constant::String(n, ref s) =>
+                write!(f, "\"{}\"", &s[n ..]),
             &Constant::Usize(integer) =>
-                write!(f, "u{}", integer)
+                write!(f, "u{}", integer),
         }
     }
 }
@@ -545,11 +544,9 @@ impl PartialEq for Constant {
                 a1.as_str() == a2.as_str(),
             (&Constant::Char(c1), &Constant::Char(c2)) =>
                 c1 == c2,
-            (&Constant::CharCode(c1), &Constant::CharCode(c2)) =>
-                c1 == c2,
             (&Constant::CharCode(c1), &Constant::Integer(ref c2))
           | (&Constant::Integer(ref c2), &Constant::CharCode(c1)) =>
-              match c2.to_u8() {
+              match c2.to_u32() {
                   Some(c2) => c1 == c2,
                   None => false
               },
@@ -559,8 +556,13 @@ impl PartialEq for Constant {
                 n1 == n2,
             (&Constant::Float(ref n1), &Constant::Float(ref n2)) =>
                 n1 == n2,
-            (&Constant::String(ref s1), &Constant::String(ref s2)) =>
-                s1 == s2,
+            (&Constant::String(n1, ref s1), &Constant::String(n2, ref s2)) => {
+                if n1 < s1.len() && n2 < s2.len() {
+                    &s1[n1 ..] == &s2[n2 ..]
+                } else {
+                    n1 >= s1.len() && n2 >= s2.len()
+                }
+            }
             (&Constant::EmptyList, &Constant::EmptyList) =>
                 true,
             (&Constant::Usize(u1), &Constant::Usize(u2)) =>

@@ -873,7 +873,7 @@ impl<'a, R: Read> Parser<'a, R> {
         let mut terms = Vec::new();
 
         loop {
-            terms.push(try!(self.read_term(op_dir)));
+            terms.push(self.read_term(op_dir)?);
 
             if self.lexer.eof()? {
                 break;

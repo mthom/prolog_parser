@@ -321,11 +321,14 @@ impl<'a, R: Read> Lexer<'a, R> {
                     'b' => Ok('\u{08}'), // UTF-8 backspace
                     'v' => Ok('\u{0b}'), // UTF-8 vertical tab
                     'f' => Ok('\u{0c}'), // UTF-8 form feed
-                    '0' => Ok('\u{0}'),  // UTF-8 null char code point
                     't' => Ok('\t'),
                     'n' => Ok('\n'),
-                    'r' => Ok('\r'),                    
-                    c   => Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
+                    'r' => Ok('\r'),
+                    '0' => Ok('\u{0}'),
+                    c   => {
+                        self.return_char(c);
+                        Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
+                    }
                 }
             } else {
                 self.return_char(c);
@@ -428,13 +431,6 @@ impl<'a, R: Read> Lexer<'a, R> {
             self.get_meta_escape_sequence()
                 .or_else(|e| {
                     if let ParserError::UnexpectedChar(..) = e {
-                        self.get_control_escape_sequence()
-                    } else {
-                        Err(e)
-                    }
-                })
-                .or_else(|e| {
-                    if let ParserError::UnexpectedChar(..) = e {
                         self.get_octal_escape_sequence()
                     } else {
                         Err(e)
@@ -443,6 +439,13 @@ impl<'a, R: Read> Lexer<'a, R> {
                 .or_else(|e| {
                     if let ParserError::UnexpectedChar(..) = e {
                         self.get_hexadecimal_escape_sequence()
+                    } else {
+                        Err(e)
+                    }
+                })
+                .or_else(|e| {
+                    if let ParserError::UnexpectedChar(..)= e {
+                        self.get_control_escape_sequence()
                     } else {
                         Err(e)
                     }

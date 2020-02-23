@@ -846,4 +846,3 @@ pub type ParsingStream<R> = PutBackN<CodePoints<Bytes<R>>>;
 pub fn parsing_stream<R: Read>(src: R) -> ParsingStream<R> {
     put_back_n(CodePoints::from(src.bytes()))
 }
-

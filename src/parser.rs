@@ -236,7 +236,7 @@ impl<'a, R: Read> Parser<'a, R> {
     pub fn col_num(&self) -> usize {
         self.lexer.col_num
     }
-    
+
     #[inline]
     pub fn get_atom_tbl(&self) -> TabledData<Atom> {
         self.lexer.atom_tbl.clone()
@@ -247,10 +247,15 @@ impl<'a, R: Read> Parser<'a, R> {
         self.lexer.atom_tbl = atom_tbl;
     }
 
-    fn get_term_name(&mut self, tt: TokenType) -> Option<(ClauseName, Option<SharedOpDesc>)> {
-        match tt {
-            TokenType::Comma => Some((clause_name!(","), Some(SharedOpDesc::new(1000, XFY)))),
-            TokenType::Term =>
+    fn get_term_name(&mut self, td: TokenDesc) -> Option<(ClauseName, Option<SharedOpDesc>)> {
+        match td.tt {
+            TokenType::HeadTailSeparator => {
+                Some((clause_name!("|"), Some(SharedOpDesc::new(td.priority, td.spec))))
+            }
+            TokenType::Comma => {
+                Some((clause_name!(","), Some(SharedOpDesc::new(1000, XFY))))
+            }
+            TokenType::Term => {
                 match self.terms.pop() {
                     Some(Term::Constant(_, Constant::Atom(atom, spec))) =>
                         Some((atom, spec)),
@@ -259,15 +264,18 @@ impl<'a, R: Read> Parser<'a, R> {
                         None
                     },
                     _ => None
-                },
-            _ => None
+                }
+            }
+            _ => {
+                None
+            }
         }
     }
 
     fn push_binary_op(&mut self, td: TokenDesc, spec: Specifier)
     {
         if let Some(arg2) = self.terms.pop() {
-            if let Some((name, shared_op_desc)) = self.get_term_name(td.tt) {
+            if let Some((name, shared_op_desc)) = self.get_term_name(td) {
                 if let Some(arg1) = self.terms.pop() {
                     let term = Term::Clause(Cell::default(),
                                             name,
@@ -351,17 +359,17 @@ impl<'a, R: Read> Parser<'a, R> {
                     if let Some(desc3) = self.stack.pop() {
                         if is_xfx!(desc2.spec) && affirm_xfx(priority, desc2, desc3, desc1)
                         {
-                            self.push_binary_op(desc2, LTERM); //, XFX);
+                            self.push_binary_op(desc2, LTERM);
                             continue;
                         }
                         else if is_yfx!(desc2.spec) && affirm_yfx(priority, desc2, desc3, desc1)
                         {
-                            self.push_binary_op(desc2, LTERM);//, YFX);
+                            self.push_binary_op(desc2, LTERM);
                             continue;
                         }
                         else if is_xfy!(desc2.spec) && affirm_xfy(priority, desc2, desc3, desc1)
                         {
-                            self.push_binary_op(desc2, TERM);//, XFY);
+                            self.push_binary_op(desc2, TERM);
                             continue;
                         } else {
                             self.stack.push(desc3);
@@ -499,6 +507,34 @@ impl<'a, R: Read> Parser<'a, R> {
         self.stack.clear()
     }
 
+    fn expand_comma_compacted_terms(&mut self, index: usize) -> usize
+    {
+        if let Some(term) = self.terms.pop() {
+            let op_desc = self.stack[index - 1];
+
+            if 0 < op_desc.priority && op_desc.priority < self.stack[index].priority {
+                /* '|' is a head-tail separator here, not
+                 * an operator, so expand the
+                 * terms it compacted out again. */
+                match (term.name(), term.arity()) {
+                    (Some(name), 2) if name.as_str() == "," => {
+                        let terms = unfold_by_str(term, ",");
+                        let arity = terms.len() - 1;
+
+                        self.terms.extend(terms.into_iter());
+                        return arity;
+                    }
+                    _ => {
+                    }
+                }
+            }
+
+            self.terms.push(term);
+        }
+
+        0
+    }
+
     fn compute_arity_in_list(&self) -> Option<usize>
     {
         let mut arity = 0;
@@ -561,13 +597,20 @@ impl<'a, R: Read> Parser<'a, R> {
         let end_term = if self.stack[idx].tt != TokenType::HeadTailSeparator {
             Term::Constant(Cell::default(), Constant::EmptyList)
         } else {
-            arity -= 1;
+            let term =
+                match self.terms.pop() {
+                    Some(term) => term,
+                    _ => return Err(ParserError::IncompleteReduction(self.lexer.line_num,
+                                                                     self.lexer.col_num))
+                };
 
-            match self.terms.pop() {
-                Some(term) => term,
-                _ => return Err(ParserError::IncompleteReduction(self.lexer.line_num,
-                                                                 self.lexer.col_num))
+            if arity == 2 && self.stack[idx].priority > 1000 {
+                arity += self.expand_comma_compacted_terms(idx);
             }
+            
+            arity -= 1;            
+
+            term
         };
 
         let idx = self.terms.len() - arity;
@@ -675,7 +718,9 @@ impl<'a, R: Read> Parser<'a, R> {
         if let Some(OpDesc { pre, inf, post, spec }) = get_desc(name.clone(), op_dir) {
             if (pre > 0 && inf + post > 0) || is_negate!(spec) {
                 match self.tokens.last().ok_or(ParserError::UnexpectedEOF)? {
-                    &Token::OpenCT => { // do this when layout hasn't been inserted, ie. why we don't match on Token::Open.
+                    // do this when layout hasn't been inserted,
+                    // ie. why we don't match on Token::Open.
+                    &Token::OpenCT => {
                         // can't be prefix, so either inf == 0
                         // or post == 0.
                         self.reduce_op(inf + post);
@@ -767,7 +812,7 @@ impl<'a, R: Read> Parser<'a, R> {
 
         self.shift(Token::Constant(constr(n)), 0, TERM);
     }
-    
+
     fn shift_token(&mut self, token: Token, op_dir: CompositeOp) -> Result<(), ParserError> {
         match token {
             Token::Constant(Constant::Integer(n)) =>
@@ -807,17 +852,15 @@ impl<'a, R: Read> Parser<'a, R> {
                                                                 self.lexer.col_num));
                 },
             Token::HeadTailSeparator => {
-                let name = clause_name!("|");
+                /* '|' as an operator must have priority > 1000 and can only be infix.
+                 * See: http://www.complang.tuwien.ac.at/ulrich/iso-prolog/dtc2#Res_A78
+                 */
+                let (priority, spec) = get_desc(clause_name!("|"), op_dir)
+                    .map(|OpDesc { inf, spec, .. }| (inf, spec))
+                    .unwrap_or((1000, DELIMITER));
 
-                if get_desc(name.clone(), op_dir).is_some() {
-                    // treat '|' like any other operator if it is defined as one.
-                    if !self.shift_op(name.clone(), op_dir)? {
-                        self.shift(Token::Constant(Constant::Atom(name, None)), 0, TERM);
-                    }
-                } else {
-                    self.reduce_op(1000);
-                    self.shift(Token::HeadTailSeparator, 1000, DELIMITER);
-                }
+                self.reduce_op(priority);
+                self.shift(Token::HeadTailSeparator, priority, spec);
             },
             Token::Comma => {
                 self.reduce_op(1000);

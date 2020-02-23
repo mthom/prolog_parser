@@ -815,9 +815,35 @@ impl<'a, 'b> CompositeOp<'a, 'b>
     }
 }
 
+fn unfold_by_str_once(term: &mut Term, s: &str) -> Option<(Term, Term)> {
+    if let &mut Term::Clause(_, ref name, ref mut subterms, _) = term {
+        if name.as_str() == s && subterms.len() == 2 {
+            let snd = *subterms.pop().unwrap();
+            let fst = *subterms.pop().unwrap();
+
+            return Some((fst, snd));
+        }
+    }
+
+    None
+}
+
+pub fn unfold_by_str(mut term: Term, s: &str) -> Vec<Term> {
+    let mut terms = vec![];
+
+    while let Some((fst, snd)) = unfold_by_str_once(&mut term, s) {
+        terms.push(fst);
+        term = snd;
+    }
+
+    terms.push(term);
+    terms
+}
+
 pub type ParsingStream<R> = PutBackN<CodePoints<Bytes<R>>>;
 
 #[inline]
 pub fn parsing_stream<R: Read>(src: R) -> ParsingStream<R> {
     put_back_n(CodePoints::from(src.bytes()))
 }
+

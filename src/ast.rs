@@ -321,7 +321,7 @@ pub enum ParserError {
     BadPendingByte,
     CannotParseCyclicTerm,
     UnexpectedChar(char, usize, usize),
-    UnexpectedEOF,
+    UnexpectedEOF,    
     IO(IOError),
     ExpectedRel,
     ExpectedTopLevelTerm,
@@ -329,6 +329,7 @@ pub enum ParserError {
     InadmissibleQueryTerm,
     IncompleteReduction(usize, usize),
     InconsistentEntry,
+    InvalidDoubleQuotesDecl,
     InvalidHook,
     InvalidModuleDecl,
     InvalidModuleExport,
@@ -384,6 +385,8 @@ impl ParserError {
                 "incomplete_reduction",
             &ParserError::InconsistentEntry =>
                 "inconsistent_entry",
+            &ParserError::InvalidDoubleQuotesDecl =>
+                "invalid_double_quotes_declaration",
             &ParserError::InvalidHook =>
                 "invalid_hook",
             &ParserError::InvalidModuleDecl =>

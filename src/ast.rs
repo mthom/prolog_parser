@@ -540,13 +540,17 @@ impl PartialEq for Constant {
         match (self, other) {
             (&Constant::Atom(ref atom, _), &Constant::Char(c))
           | (&Constant::Char(c), &Constant::Atom(ref atom, _)) => {
-              let s = atom.as_str();
-              c.len_utf8() == s.len() && Some(c) == s.chars().next()
+              atom.is_char() && Some(c) == atom.as_str().chars().next()
             },
             (&Constant::Atom(ref a1, _), &Constant::Atom(ref a2, _)) =>
                 a1.as_str() == a2.as_str(),
             (&Constant::Char(c1), &Constant::Char(c2)) =>
                 c1 == c2,
+            (&Constant::CharCode(c1), &Constant::CharCode(c2)) =>
+                c1 == c2,
+            (&Constant::Char(c1), &Constant::CharCode(c2))
+          | (&Constant::CharCode(c2), &Constant::Char(c1)) =>
+                c1 as u32 == c2,
             (&Constant::CharCode(c1), &Constant::Integer(ref c2))
           | (&Constant::Integer(ref c2), &Constant::CharCode(c1)) =>
               match c2.to_u32() {
@@ -699,6 +703,11 @@ impl ClauseName {
             &ClauseName::BuiltIn(s) => s,
             &ClauseName::User(ref name) => name.as_ref()
         }
+    }
+
+    #[inline]
+    pub fn is_char(&self) -> bool {
+        !self.as_str().is_empty() && self.as_str().chars().skip(1).next().is_none()
     }
 
     pub fn defrock_brackets(self) -> Self {

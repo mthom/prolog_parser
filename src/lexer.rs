@@ -261,7 +261,8 @@ impl<'a, R: Read> Lexer<'a, R> {
         }
     }
 
-    fn get_double_quoted_item(&mut self) -> Result<Option<char>, ParserError> {
+    fn get_double_quoted_item(&mut self) -> Result<Option<char>, ParserError>
+    {
         if backslash_char!(self.lookahead_char()?) {
             let c = self.skip_char()?;
 
@@ -559,8 +560,8 @@ impl<'a, R: Read> Lexer<'a, R> {
             if single_quote_char!(self.lookahead_char()?) {
                 self.skip_char()?;
 
-                if let Some(c) = token.chars().next() {
-                    if token.len() == 1 {
+                if !token.is_empty() && token.chars().skip(1).next().is_none() {
+                    if let Some(c) = token.chars().next() {
                         return Ok(Token::Constant(Constant::Char(c)));
                     }
                 }

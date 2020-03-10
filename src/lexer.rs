@@ -1,6 +1,6 @@
-use lexical::parse_lossy;
-use ordered_float::*;
-use rug::Integer;
+use crate::lexical::parse_lossy;
+use crate::ordered_float::*;
+use crate::rug::Integer;
 
 use ast::*;
 use tabled_rc::*;

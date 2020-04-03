@@ -495,13 +495,12 @@ pub enum Constant {
     Atom(ClauseName, Option<SharedOpDesc>),
     Char(char),
     CharCode(u32),
-    CutPoint(usize),
-    Integer(Integer),
-    Rational(Rational),
+    EmptyList,
+    Integer(Rc<Integer>),
+    Rational(Rc<Rational>),
     Float(OrderedFloat<f64>),
-    String(usize, Rc<String>),
+    String(Rc<String>),
     Usize(usize),
-    EmptyList
 }
 
 impl fmt::Display for Constant {
@@ -517,8 +516,6 @@ impl fmt::Display for Constant {
                 write!(f, "'{}'", c as u32),
             &Constant::CharCode(c) =>
                 write!(f, "{}", c),
-            &Constant::CutPoint(b) =>
-                write!(f, "{}", b),
             &Constant::EmptyList =>
                 write!(f, "[]"),
             &Constant::Integer(ref n) =>
@@ -527,8 +524,8 @@ impl fmt::Display for Constant {
                 write!(f, "{}", n),
             &Constant::Float(ref n) =>
                 write!(f, "{}", n),
-            &Constant::String(n, ref s) =>
-                write!(f, "\"{}\"", &s[n ..]),
+            &Constant::String(ref s) =>
+                write!(f, "\"{}\"", &s),
             &Constant::Usize(integer) =>
                 write!(f, "u{}", integer),
         }
@@ -563,12 +560,8 @@ impl PartialEq for Constant {
                 n1 == n2,
             (&Constant::Float(ref n1), &Constant::Float(ref n2)) =>
                 n1 == n2,
-            (&Constant::String(n1, ref s1), &Constant::String(n2, ref s2)) => {
-                if n1 < s1.len() && n2 < s2.len() {
-                    &s1[n1 ..] == &s2[n2 ..]
-                } else {
-                    n1 >= s1.len() && n2 >= s2.len()
-                }
+            (&Constant::String(ref s1), &Constant::String(ref s2)) => {
+                &s1 == &s2
             }
             (&Constant::EmptyList, &Constant::EmptyList) =>
                 true,
@@ -582,7 +575,7 @@ impl PartialEq for Constant {
 impl Eq for Constant {}
 
 impl Constant {
-    pub fn to_integer(self) -> Option<Integer> {
+    pub fn to_integer(self) -> Option<Rc<Integer>> {
         match self {
             Constant::Integer(b) => Some(b),
             _ => None

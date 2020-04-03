@@ -4,9 +4,12 @@ use tabled_rc::*;
 
 use ordered_float::OrderedFloat;
 
+use rug::ops::NegAssign;
+
 use std::cell::Cell;
 use std::io::Read;
 use std::mem::swap;
+use std::rc::Rc;
 
 #[derive(Clone, Copy, PartialEq)]
 enum TokenType {
@@ -791,8 +794,14 @@ impl<'a, R: Read> Parser<'a, R> {
         }
     }
 
-    fn negate_number<N, Negator, ToConstant>(&mut self, n: N, negator: Negator, constr: ToConstant)
-        where Negator: Fn(N) -> N, ToConstant: Fn(N) -> Constant
+    fn negate_number<N, Negator, ToConstant>(
+        &mut self,
+        n: N,
+        negator: Negator,
+        constr: ToConstant
+    )
+    where Negator: Fn(N) -> N,
+          ToConstant: Fn(N) -> Constant          
     {
         if let Some(desc) = self.stack.last().cloned() {
             if let Some(term) = self.terms.last().cloned() {
@@ -814,13 +823,29 @@ impl<'a, R: Read> Parser<'a, R> {
     }
 
     fn shift_token(&mut self, token: Token, op_dir: CompositeOp) -> Result<(), ParserError> {
+        fn negate_rc<T: NegAssign>(mut t: Rc<T>) -> Rc<T> {
+            match Rc::get_mut(&mut t) {
+                Some(t) => {
+                    t.neg_assign();
+                }
+                None => {
+                }
+            };
+
+            t
+        }
+        
         match token {
             Token::Constant(Constant::Integer(n)) =>
-                self.negate_number(n, |n| -n, |n| Constant::Integer(n)),
+                self.negate_number(n, negate_rc, Constant::Integer),
             Token::Constant(Constant::Rational(n)) =>
-                self.negate_number(n, |n| -n, |n| Constant::Rational(n)),
+                self.negate_number(n, negate_rc, Constant::Rational),
             Token::Constant(Constant::Float(n)) =>
-                self.negate_number(n, |n| OrderedFloat(-n.into_inner()), |n| Constant::Float(n)),
+                self.negate_number(
+                    n,
+                    |n| OrderedFloat(-n.into_inner()),
+                    |n| Constant::Float(n)
+                ),
             Token::Constant(c) =>
                 if let Some(name) = self.atomize_constant(&c) {
                     if !self.shift_op(name, op_dir)? {
@@ -835,21 +860,27 @@ impl<'a, R: Read> Parser<'a, R> {
             Token::Close  =>
                 if !self.reduce_term(op_dir) {
                     if !self.reduce_brackets() {
-                        return Err(ParserError::IncompleteReduction(self.lexer.line_num,
-                                                                    self.lexer.col_num));
+                        return Err(ParserError::IncompleteReduction(
+                            self.lexer.line_num,
+                            self.lexer.col_num,
+                        ));
                     }
                 },
             Token::OpenList  => self.shift(Token::OpenList, 1300, DELIMITER),
             Token::CloseList =>
                 if !self.reduce_list()? {
-                    return Err(ParserError::IncompleteReduction(self.lexer.line_num,
-                                                                self.lexer.col_num));
+                    return Err(ParserError::IncompleteReduction(
+                        self.lexer.line_num,
+                        self.lexer.col_num,
+                    ));
                 },
             Token::OpenCurly => self.shift(Token::OpenCurly, 1300, DELIMITER),
             Token::CloseCurly =>
                 if !self.reduce_curly()? {
-                    return Err(ParserError::IncompleteReduction(self.lexer.line_num,
-                                                                self.lexer.col_num));
+                    return Err(ParserError::IncompleteReduction(
+                        self.lexer.line_num,
+                        self.lexer.col_num,
+                    ));
                 },
             Token::HeadTailSeparator => {
                 /* '|' as an operator must have priority > 1000 and can only be infix.

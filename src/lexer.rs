@@ -468,54 +468,78 @@ impl<'a, R: Read> Lexer<'a, R> {
         }
     }
 
-    fn hexadecimal_constant(&mut self) -> Result<Integer, ParserError> {
+    fn hexadecimal_constant(&mut self) -> Result<Token, ParserError> {
         self.skip_char()?;
 
         if hexadecimal_digit_char!(self.lookahead_char()?) {
-            let mut s = String::new();
+            let mut token = String::new();
 
             while hexadecimal_digit_char!(self.lookahead_char()?) {
-                s.push(self.skip_char()?);
+                token.push(self.skip_char()?);
             }
 
-            Ok(Integer::from_str_radix(&s, 16)
-               .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
+            isize::from_str_radix(&token, 16)
+                .map(|n| Token::Constant(Constant::Fixnum(n)))
+                .or_else(|_| {
+                    Integer::from_str_radix(&token, 16)
+                         .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                         .map_err(|_| ParserError::ParseBigInt(
+                             self.line_num,
+                             self.col_num,
+                         ))
+                })
         } else {
             self.return_char('x');
             Err(ParserError::ParseBigInt(self.line_num, self.col_num))
         }
     }
 
-    fn octal_constant(&mut self) -> Result<Integer, ParserError> {
+    fn octal_constant(&mut self) -> Result<Token, ParserError> {
         self.skip_char()?;
 
         if octal_digit_char!(self.lookahead_char()?) {
-            let mut s = String::new();
+            let mut token = String::new();
 
             while octal_digit_char!(self.lookahead_char()?) {
-                s.push(self.skip_char()?);
+                token.push(self.skip_char()?);
             }
 
-            Ok(Integer::from_str_radix(&s, 8)
-               .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
+            isize::from_str_radix(&token, 8)
+                .map(|n| Token::Constant(Constant::Fixnum(n)))
+                .or_else(|_| {
+                    Integer::from_str_radix(&token, 8)
+                         .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                         .map_err(|_| ParserError::ParseBigInt(
+                             self.line_num,
+                             self.col_num,
+                         ))
+                })
         } else {
             self.return_char('o');
             Err(ParserError::ParseBigInt(self.line_num, self.col_num))
         }
     }
 
-    fn binary_constant(&mut self) -> Result<Integer, ParserError> {
+    fn binary_constant(&mut self) -> Result<Token, ParserError> {
         self.skip_char()?;
 
         if binary_digit_char!(self.lookahead_char()?) {
-            let mut s = String::new();
+            let mut token = String::new();
 
             while binary_digit_char!(self.lookahead_char()?) {
-                s.push(self.skip_char()?);
+                token.push(self.skip_char()?);
             }
 
-            Ok(Integer::from_str_radix(&s, 2)
-               .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
+            isize::from_str_radix(&token, 2)
+                .map(|n| Token::Constant(Constant::Fixnum(n)))
+                .or_else(|_| {
+                    Integer::from_str_radix(&token, 2)
+                         .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                         .map_err(|_| ParserError::ParseBigInt(
+                             self.line_num,
+                             self.col_num,
+                         ))
+                })
         } else {
             self.return_char('b');
             Err(ParserError::ParseBigInt(self.line_num, self.col_num))
@@ -603,9 +627,17 @@ impl<'a, R: Read> Lexer<'a, R> {
 
             if self.reader.peek().is_none() {
                 self.return_char('.');
-                let n = token.parse::<Integer>()
-                       .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
-                Ok(Token::Constant(Constant::Integer(Rc::new(n))))
+
+                isize::from_str_radix(&token, 10)
+                    .map(|n| Token::Constant(Constant::Fixnum(n)))
+                    .or_else(|_| {
+                        token.parse::<Integer>()
+                             .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                             .map_err(|_| ParserError::ParseBigInt(
+                                 self.line_num,
+                                 self.col_num,
+                             ))
+                    })
             } else if decimal_digit_char!(self.lookahead_char()?) {
                 token.push('.');
                 token.push(self.skip_char()?);
@@ -665,76 +697,115 @@ impl<'a, R: Read> Lexer<'a, R> {
                 }
             } else {
                 self.return_char('.');
-                let n = token.parse::<Integer>()
-                        .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
-                Ok(Token::Constant(Constant::Integer(Rc::new(n))))
+
+                isize::from_str_radix(&token, 10)
+                    .map(|n| Token::Constant(Constant::Fixnum(n)))
+                    .or_else(|_| {
+                        token.parse::<Integer>()
+                             .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                             .map_err(|_| ParserError::ParseBigInt(
+                                 self.line_num,
+                                 self.col_num,
+                             ))
+                    })
             }
         } else {
             if token.starts_with('0') && token.len() == 1 {
                 if c == 'x' {
-                    Ok(Token::Constant(Constant::Integer(Rc::new(
-                        self.hexadecimal_constant()
-                            .or_else(|e| {
-                                if let ParserError::ParseBigInt(..) = e {
-                                    Ok(token.parse::<Integer>()
-                                       .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
-                                } else {
-                                    Err(e)
-                                }
-                            })?))))
+                    self.hexadecimal_constant()
+                        .or_else(|e| {
+                            if let ParserError::ParseBigInt(..) = e {
+                                isize::from_str_radix(&token, 10)
+                                    .map(|n| Token::Constant(Constant::Fixnum(n)))
+                                    .or_else(|_| {
+                                        token.parse::<Integer>()
+                                             .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                                             .map_err(|_| ParserError::ParseBigInt(
+                                                 self.line_num,
+                                                 self.col_num,
+                                             ))
+                                    })
+                            } else {
+                                Err(e)
+                            }
+                        })
                 } else if c == 'o' {
-                    Ok(Token::Constant(Constant::Integer(Rc::new(
-                        self.octal_constant()
-                            .or_else(|e| {
-                                if let ParserError::ParseBigInt(..) = e {
-                                    Ok(token.parse::<Integer>()
-                                       .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
-                                } else {
-                                    Err(e)
-                                }
-                            })?))))
+                    self.octal_constant()
+                        .or_else(|e| {
+                            if let ParserError::ParseBigInt(..) = e {
+                                isize::from_str_radix(&token, 10)
+                                    .map(|n| Token::Constant(Constant::Fixnum(n)))
+                                    .or_else(|_| {
+                                        token.parse::<Integer>()
+                                            .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                                            .map_err(|_| ParserError::ParseBigInt(
+                                                self.line_num,
+                                                self.col_num,
+                                            ))
+                                    })
+                            } else {
+                                Err(e)
+                            }
+                        })
                 } else if c == 'b' {
-                    Ok(Token::Constant(Constant::Integer(Rc::new(
-                        self.binary_constant()
-                            .or_else(|e| {
-                                if let ParserError::ParseBigInt(..) = e {
-                                    Ok(token.parse::<Integer>()
-                                       .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?)
-                                } else {
-                                    Err(e)
-                                }
-                            })?))))
+                    self.binary_constant()
+                        .or_else(|e| {
+                            if let ParserError::ParseBigInt(..) = e {
+                                isize::from_str_radix(&token, 10)
+                                    .map(|n| Token::Constant(Constant::Fixnum(n)))
+                                    .or_else(|_| {
+                                        token.parse::<Integer>()
+                                             .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                                             .map_err(|_| ParserError::ParseBigInt(
+                                                 self.line_num,
+                                                 self.col_num,
+                                             ))
+                                    })
+                            } else {
+                                Err(e)
+                            }
+                        })
                 } else if single_quote_char!(c) {
                     self.skip_char()?;
                     self.get_single_quoted_char()
                         .map(|c| Token::Constant(Constant::CharCode(c as u32)))
                         .or_else(|_| {
                             self.return_char(c);
-                            let n = token.parse::<Integer>()
-                                .map_err(|_| ParserError::ParseBigInt(
-                                    self.line_num,
-                                    self.col_num,
-                                ))?;
 
-                            Ok(Token::Constant(Constant::Integer(Rc::new(n))))
+                            isize::from_str_radix(&token, 10)
+                                .map(|n| Token::Constant(Constant::Fixnum(n)))
+                                .or_else(|_| {
+                                    token.parse::<Integer>()
+                                         .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                                         .map_err(|_| ParserError::ParseBigInt(
+                                             self.line_num,
+                                             self.col_num,
+                                         ))
+                                })
                         })
                 } else {
-                    let n = token.parse::<Integer>()
-                        .map_err(|_| ParserError::ParseBigInt(
-                            self.line_num,
-                            self.col_num,
-                        ))?;
-
-                    Ok(Token::Constant(Constant::Integer(Rc::new(n))))
+                    isize::from_str_radix(&token, 10)
+                        .map(|n| Token::Constant(Constant::Fixnum(n)))
+                        .or_else(|_| {
+                            token.parse::<Integer>()
+                                 .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                                 .map_err(|_| ParserError::ParseBigInt(
+                                     self.line_num,
+                                     self.col_num,
+                                 ))
+                        })
                 }
             } else {
-                let n = token.parse::<Integer>()
-                    .map_err(|_| ParserError::ParseBigInt(
-                        self.line_num,
-                        self.col_num,
-                    ))?;
-
-                Ok(Token::Constant(Constant::Integer(Rc::new(n))))
+                isize::from_str_radix(&token, 10)
+                    .map(|n| Token::Constant(Constant::Fixnum(n)))
+                    .or_else(|_| {
+                        token.parse::<Integer>()
+                             .map(|n| Token::Constant(Constant::Integer(Rc::new(n))))
+                             .map_err(|_| ParserError::ParseBigInt(
+                                 self.line_num,
+                                 self.col_num,
+                             ))
+                    })
             }
         }
     }

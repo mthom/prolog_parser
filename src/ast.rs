@@ -496,6 +496,7 @@ pub enum Constant {
     Char(char),
     CharCode(u32),
     EmptyList,
+    Fixnum(isize),
     Integer(Rc<Integer>),
     Rational(Rc<Rational>),
     Float(OrderedFloat<f64>),
@@ -518,6 +519,8 @@ impl fmt::Display for Constant {
                 write!(f, "{}", c),
             &Constant::EmptyList =>
                 write!(f, "[]"),
+            &Constant::Fixnum(n) =>
+                write!(f, "{}", n),
             &Constant::Integer(ref n) =>
                 write!(f, "{}", n),
             &Constant::Rational(ref n) =>
@@ -554,6 +557,16 @@ impl PartialEq for Constant {
                   Some(c2) => c1 == c2,
                   None => false
               },
+            (&Constant::Fixnum(n1), &Constant::Fixnum(n2)) =>
+                n1 == n2,
+            (&Constant::Fixnum(n1), &Constant::Integer(ref n2)) |
+            (&Constant::Integer(ref n2), &Constant::Fixnum(n1)) => {
+                if let Some(n2) = n2.to_isize() {
+                    n1 == n2
+                } else {
+                    false
+                }
+            }
             (&Constant::Integer(ref n1), &Constant::Integer(ref n2)) =>
                 n1 == n2,
             (&Constant::Rational(ref n1), &Constant::Rational(ref n2)) =>
@@ -575,13 +588,6 @@ impl PartialEq for Constant {
 impl Eq for Constant {}
 
 impl Constant {
-    pub fn to_integer(self) -> Option<Rc<Integer>> {
-        match self {
-            Constant::Integer(b) => Some(b),
-            _ => None
-        }
-    }
-
     pub fn to_atom(self) -> Option<ClauseName> {
         match self {
             Constant::Atom(a, _) => Some(a.defrock_brackets()),

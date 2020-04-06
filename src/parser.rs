@@ -610,8 +610,8 @@ impl<'a, R: Read> Parser<'a, R> {
             if arity == 2 && self.stack[idx].priority > 1000 {
                 arity += self.expand_comma_compacted_terms(idx);
             }
-            
-            arity -= 1;            
+
+            arity -= 1;
 
             term
         };
@@ -801,7 +801,7 @@ impl<'a, R: Read> Parser<'a, R> {
         constr: ToConstant
     )
     where Negator: Fn(N) -> N,
-          ToConstant: Fn(N) -> Constant          
+          ToConstant: Fn(N) -> Constant
     {
         if let Some(desc) = self.stack.last().cloned() {
             if let Some(term) = self.terms.last().cloned() {
@@ -834,8 +834,10 @@ impl<'a, R: Read> Parser<'a, R> {
 
             t
         }
-        
+
         match token {
+            Token::Constant(Constant::Fixnum(n)) =>
+                self.negate_number(n, |n| -n, Constant::Fixnum),
             Token::Constant(Constant::Integer(n)) =>
                 self.negate_number(n, negate_rc, Constant::Integer),
             Token::Constant(Constant::Rational(n)) =>

@@ -94,7 +94,7 @@ macro_rules! graphic_token_char {
 
 #[macro_export]
 macro_rules! alpha_char {
-    ($c: expr) => 
+    ($c: expr) =>
         (match $c {
             'a' ..= 'z' => true,
             'A' ..= 'Z' => true,

@@ -502,8 +502,8 @@ impl<'a, R: Read> Parser<'a, R> {
     }
 
     pub fn devour_whitespace(&mut self) -> Result<(), ParserError> {
-	self.lexer.scan_for_layout()?;
-	Ok(())
+	    self.lexer.scan_for_layout()?;
+	    Ok(())
     }
 
     pub fn reset(&mut self) {
@@ -607,7 +607,7 @@ impl<'a, R: Read> Parser<'a, R> {
                                                                      self.lexer.col_num))
                 };
 
-            if arity == 2 && self.stack[idx].priority > 1000 {
+            if self.stack[idx].priority >= 1000 {
                 arity += self.expand_comma_compacted_terms(idx);
             }
 

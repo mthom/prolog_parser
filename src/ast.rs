@@ -321,7 +321,7 @@ pub enum ParserError {
     BadPendingByte,
     CannotParseCyclicTerm,
     UnexpectedChar(char, usize, usize),
-    UnexpectedEOF,    
+    UnexpectedEOF,
     IO(IOError),
     ExpectedRel,
     ExpectedTopLevelTerm,

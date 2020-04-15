@@ -820,9 +820,15 @@ impl<'a, 'b> CompositeOp<'a, 'b>
     pub(crate)
     fn get(&self, name: ClauseName, fixity: Fixity) -> Option<OpDirValue>
     {
-        self.op_dir.get(&(name.clone(), fixity))
-            .or_else(move || self.static_op_dir.and_then(|op_dir| op_dir.get(&(name, fixity))))
-            .cloned()
+        let entry =
+            if let Some(ref static_op_dir) = &self.static_op_dir {
+                static_op_dir.get(&(name.clone(), fixity))
+            } else {
+                None
+            };
+
+        entry.or_else(move || self.op_dir.get(&(name, fixity)))
+             .cloned()
     }
 }
 

@@ -607,7 +607,7 @@ impl<'a, R: Read> Parser<'a, R> {
                                                                      self.lexer.col_num))
                 };
 
-            if self.stack[idx].priority >= 1000 {
+            if self.stack[idx].priority > 1000 {
                 arity += self.expand_comma_compacted_terms(idx);
             }
 

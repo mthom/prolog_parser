@@ -128,7 +128,7 @@ macro_rules! is_fy {
     ($x:expr) => ( ($x & FY) != 0 )
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RegType {
     Perm(usize),
     Temp(usize)
@@ -164,7 +164,7 @@ impl fmt::Display for RegType {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum VarReg {
     ArgAndNorm(RegType, usize),
     Norm(RegType)
@@ -211,7 +211,7 @@ macro_rules! perm_v {
     )
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GenContext {
     Head, Mid(usize), Last(usize) // Mid & Last: chunk_num
 }
@@ -227,7 +227,7 @@ impl GenContext {
 
 pub type OpDirKey = (ClauseName, Fixity);
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct OpDirValue(pub SharedOpDesc, pub ClauseName);
 
 impl OpDirValue {
@@ -249,7 +249,7 @@ impl OpDirValue {
 // name and fixity -> operator type and precedence.
 pub type OpDir = HashMap<OpDirKey, OpDirValue>;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct MachineFlags {
     pub double_quotes: DoubleQuotes
 }
@@ -260,7 +260,7 @@ impl Default for MachineFlags {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum DoubleQuotes {
     Atom, Chars, Codes
 }
@@ -309,12 +309,13 @@ pub fn default_op_dir() -> OpDir {
     op_dir
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ArithmeticError {
     NonEvaluableFunctor(Constant, usize),
     UninstantiatedVar
 }
 
+#[derive(Debug)]
 pub enum ParserError {
     Arithmetic(ArithmeticError),
     BackQuotedString(usize, usize),
@@ -431,12 +432,12 @@ impl From<IOError> for ParserError {
     }
 }
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum Fixity {
     In, Post, Pre
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SharedOpDesc(Rc<Cell<(usize, Specifier)>>);
 
 impl SharedOpDesc {
@@ -490,7 +491,7 @@ impl Hash for SharedOpDesc {
     }
 }
 
-#[derive(Clone, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub enum Constant {
     Atom(ClauseName, Option<SharedOpDesc>),
     Char(char),
@@ -596,7 +597,7 @@ impl Constant {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ClauseName {
     BuiltIn(&'static str),
     User(TabledRc<Atom>)
@@ -734,7 +735,7 @@ impl AsRef<str> for ClauseName {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Term {
     AnonVar,
     Clause(Cell<RegType>, ClauseName, Vec<Box<Term>>, Option<SharedOpDesc>),
@@ -793,7 +794,7 @@ impl Term {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct CompositeOp<'a, 'b> {
     pub op_dir: &'a OpDir,
     pub static_op_dir: Option<&'b OpDir>

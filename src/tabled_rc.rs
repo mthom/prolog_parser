@@ -11,6 +11,15 @@ pub struct TabledData<T> {
     pub(crate) module_name: Rc<String>
 }
 
+impl<T: fmt::Debug> fmt::Debug for TabledData<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TabledData")
+            .field("table", &self.table)
+            .field("module_name", &self.table)
+            .finish()
+    }
+}
+
 impl<T> Clone for TabledData<T> {
     fn clone(&self) -> Self {
         TabledData { table: self.table.clone(),
@@ -33,7 +42,7 @@ impl<T: Hash + Eq> TabledData<T> {
             module_name
         }
     }
-    
+
     #[inline]
     pub fn borrow_mut(&self) -> RefMut<HashSet<Rc<T>>> {
         self.table.borrow_mut()
@@ -43,6 +52,15 @@ impl<T: Hash + Eq> TabledData<T> {
 pub struct TabledRc<T: Hash + Eq> {
     pub(crate) atom: Rc<T>,
     pub table: TabledData<T>
+}
+
+impl<T: Hash + Eq + fmt::Debug> fmt::Debug for TabledRc<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TabledRc")
+            .field("atom", &self.atom)
+            .field("table", &self.table)
+            .finish()
+    }
 }
 
 // this Clone instance is manually defined to prevent the compiler
@@ -93,12 +111,12 @@ impl<T: Hash + Eq + ToString> TabledRc<T> {
 
         TabledRc { atom, table }
     }
-    
+
     #[inline]
     pub fn inner(&self) -> Rc<T> {
         self.atom.clone()
     }
-    
+
     #[inline]
     pub(crate) fn owning_module(&self) -> Rc<String> {
         self.table.module_name.clone()

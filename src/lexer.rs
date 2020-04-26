@@ -5,6 +5,7 @@ use crate::rug::Integer;
 use ast::*;
 use tabled_rc::*;
 
+use std::fmt;
 use std::io::Read;
 use std::rc::Rc;
 
@@ -39,7 +40,7 @@ macro_rules! put_back_n {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Constant(Constant),
     Var(Rc<Atom>),
@@ -61,6 +62,17 @@ pub struct Lexer<'a, R: Read> {
     flags: MachineFlags,
     pub(crate) line_num: usize,
     pub(crate) col_num: usize
+}
+
+impl<'a, R: Read + fmt::Debug> fmt::Debug for Lexer<'a, R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Lexer")
+            .field("atom_tbl", &self.atom_tbl)
+            .field("reader", &"&'a mut ParsingStream<R>")  // Hacky solution.
+            .field("line_num", &self.line_num)
+            .field("col_num", &self.col_num)
+            .finish()
+    }
 }
 
 impl<'a, R: Read> Lexer<'a, R> {

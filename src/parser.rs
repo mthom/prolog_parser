@@ -11,7 +11,7 @@ use std::io::Read;
 use std::mem::swap;
 use std::rc::Rc;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum TokenType {
     Term,
     Open,
@@ -38,7 +38,7 @@ impl TokenType {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct TokenDesc {
     tt: TokenType,
     priority: usize,
@@ -185,7 +185,7 @@ fn sep_to_atom(tt: TokenType) -> Option<ClauseName>
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct OpDesc {
     pub pre: usize,
     pub inf: usize,
@@ -193,6 +193,7 @@ pub struct OpDesc {
     pub spec: Specifier
 }
 
+#[derive(Debug)]
 pub struct Parser<'a, R: Read> {
     lexer: Lexer<'a, R>,
     tokens: Vec<Token>,

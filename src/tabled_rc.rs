@@ -11,7 +11,7 @@ pub struct TabledData<T> {
     pub(crate) module_name: Rc<String>
 }
 
-impl<T: fmt::Debug> fmt::Debug for TabledData<T> {
+impl<T: Hash + Eq + fmt::Debug> fmt::Debug for TabledData<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("TabledData")
             .field("table", &self.table)

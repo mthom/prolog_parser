@@ -432,6 +432,17 @@ impl From<IOError> for ParserError {
     }
 }
 
+impl From<&IOError> for ParserError {
+    fn from(error: &IOError) -> ParserError {
+        if error.get_ref().filter(|e| e.is::<BadUtf8Error>()).is_some() {
+            ParserError::Utf8Error(0, 0)
+        } else {
+            ParserError::IO(error.kind().into())
+        }
+    }
+}
+
+
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum Fixity {
     In, Post, Pre
@@ -860,7 +871,20 @@ pub fn unfold_by_str(mut term: Term, s: &str) -> Vec<Term> {
 
 pub type ParsingStream<R> = PutBackN<CodePoints<Bytes<R>>>;
 
+use unicode_reader::BadUtf8Error;
+
 #[inline]
-pub fn parsing_stream<R: Read>(src: R) -> ParsingStream<R> {
-    put_back_n(CodePoints::from(src.bytes()))
+pub fn parsing_stream<R: Read>(src: R) -> Result<ParsingStream<R>, ParserError> {
+    let mut stream = put_back_n(CodePoints::from(src.bytes()));
+    match stream.peek() {
+        None => Err(ParserError::UnexpectedEOF),
+        Some(Err(error)) => Err(ParserError::from(error)),
+        Some(Ok(c)) => {
+            if *c == '\u{feff}' {
+                // skip UTF-8 BOM
+                stream.next();
+            }
+            Ok(stream)
+        }
+    }
 }

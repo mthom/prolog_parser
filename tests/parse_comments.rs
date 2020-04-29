@@ -9,7 +9,7 @@ use std::rc::Rc;
 fn read_all_tokens(text: &str) -> Result<Vec<Token>, ParserError> {
     let atom_tbl = TabledData::new(Rc::new("my_module".to_string()));
     let flags = MachineFlags::default();
-    let mut stream = parsing_stream(text.as_bytes());
+    let mut stream = parsing_stream(text.as_bytes())?;
     let mut lexer = Lexer::new(atom_tbl, flags, &mut stream);
 
     let mut tokens = Vec::new();

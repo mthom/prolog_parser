@@ -15,10 +15,7 @@ fn valid_token() {
 #[test]
 fn empty_stream() {
     let bytes: &[u8] = &[];
-    match parsing_stream(bytes) {
-        Err(ParserError::UnexpectedEOF) => (),
-        _ => assert!(false)
-    }
+    assert!(parsing_stream(bytes).is_ok());
 }
 
 #[test]

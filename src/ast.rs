@@ -877,7 +877,7 @@ use unicode_reader::BadUtf8Error;
 pub fn parsing_stream<R: Read>(src: R) -> Result<ParsingStream<R>, ParserError> {
     let mut stream = put_back_n(CodePoints::from(src.bytes()));
     match stream.peek() {
-        None => Err(ParserError::UnexpectedEOF),
+        None => Ok(stream), // empty stream is handled gracefully by Lexer::eof
         Some(Err(error)) => Err(ParserError::from(error)),
         Some(Ok(c)) => {
             if *c == '\u{feff}' {

@@ -144,43 +144,38 @@ impl<'a, R: Read> Lexer<'a, R> {
     }
 
     fn bracketed_comment(&mut self) -> Result<bool, ParserError> {
-        if comment_1_char!(self.lookahead_char()?) {
-            let c = self.skip_char()?;
+        // we have already checked that the current lookahead_char is comment_1_char, just skip it
+        let c = self.skip_char()?;
 
-            if comment_2_char!(self.lookahead_char()?) {
+        if comment_2_char!(self.lookahead_char()?) {
+            self.skip_char()?;
+
+            // Keep reading until we find characters '*' and '/'
+            // Deliberately skip checks for prolog_char to allow comments to contain any characters,
+            // including so-called "extended characters", without having to explicitly add them to a character class.
+            let mut c = self.lookahead_char()?;
+            loop {
+                while !comment_2_char!(c) {
+                    self.skip_char()?;
+                    c = self.lookahead_char()?;
+                }
+
                 self.skip_char()?;
 
-                loop {
-                    let mut c = self.lookahead_char()?;
-                    while prolog_char!(c) && !comment_2_char!(c) {
-                        self.skip_char()?;
-                        c = self.lookahead_char()?;
-                    }
-
-                    if prolog_char!(c) {
-                        self.skip_char()?;
-                    }
-
-                    c = self.lookahead_char()?;
-
-                    if !(prolog_char!(c) && !comment_1_char!(c)) {
-                        break;
-                    }
+                c = self.lookahead_char()?;
+                if comment_1_char!(c) {
+                    break;
                 }
+            }
 
-                let c = self.lookahead_char()?;
-
-                if prolog_char!(c) {
-                    self.skip_char()?;
-                    Ok(true)
-                } else {
-                    Err(ParserError::NonPrologChar(self.line_num, self.col_num))
-                }
+            if prolog_char!(c) {
+                self.skip_char()?;
+                Ok(true)
             } else {
-                self.return_char(c);
-                Ok(false)
+                Err(ParserError::NonPrologChar(self.line_num, self.col_num))
             }
         } else {
+            self.return_char(c);
             Ok(false)
         }
     }
@@ -834,11 +829,11 @@ impl<'a, R: Read> Lexer<'a, R> {
                     self.skip_char()?;
                     layout_inserted = true;
                 },
-                Ok(c) if c == '%' => {
+                Ok(c) if end_line_comment_char!(c) => {
                     self.single_line_comment()?;
                     layout_inserted = true;
                 },
-                Ok(c) if c == '/' =>
+                Ok(c) if comment_1_char!(c) =>
                     if self.bracketed_comment()? {
                         layout_inserted = true;
                     } else {

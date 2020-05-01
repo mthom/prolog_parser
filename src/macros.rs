@@ -57,6 +57,11 @@ macro_rules! new_line_char {
 }
 
 #[macro_export]
+macro_rules! end_line_comment_char {
+    ($c: expr) => ($c == '%')
+}
+
+#[macro_export]
 macro_rules! comment_1_char {
     ($c: expr) => ($c == '/')
 }

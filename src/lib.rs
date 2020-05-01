@@ -12,4 +12,4 @@ extern crate unicode_reader;
 pub mod parser;
 pub mod put_back_n;
 
-mod lexer;
+pub mod lexer;

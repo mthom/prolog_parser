@@ -33,3 +33,24 @@ fn any_char_multiline_comment() -> Result<(), ParserError> {
     assert_eq!(tokens, [Token::Constant(Constant::Fixnum(4))]);
     Ok(())
 }
+
+#[test]
+fn simple_char() -> Result<(), ParserError> {
+    let tokens = read_all_tokens("'a'\n")?;
+    assert_eq!(tokens, [Token::Constant(Constant::Char('a'))]);
+    Ok(())
+}
+
+#[test]
+fn char_with_octseq() -> Result<(), ParserError> {
+    let tokens = read_all_tokens(r"'\60433\' ")?; // use literal string so \ are escaped
+    assert_eq!(tokens, [Token::Constant(Constant::Char('愛'))]); // Japanese character
+    Ok(())
+}
+
+#[test]
+fn char_with_hexseq() -> Result<(), ParserError> {
+    let tokens = read_all_tokens(r"'\x2124\' ")?;
+    assert_eq!(tokens, [Token::Constant(Constant::Char('ℤ'))]); // Z math symbol
+    Ok(())
+}

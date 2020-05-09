@@ -5,6 +5,7 @@ use crate::rug::Integer;
 use ast::*;
 use tabled_rc::*;
 
+use std::convert::TryFrom;
 use std::fmt;
 use std::io::Read;
 use std::rc::Rc;
@@ -28,14 +29,6 @@ macro_rules! consume_chars_with {
                 Err(ParserError::UnexpectedChar(..)) => break,
                 Err(e) => return Err(e)
             }
-        }
-    }
-}
-
-macro_rules! put_back_n {
-    ($self:expr, $token:expr) => {
-        while let Some(c) = $token.pop() {
-            $self.return_char(c);
         }
     }
 }
@@ -303,130 +296,62 @@ impl<'a, R: Read> Lexer<'a, R> {
         }
     }
 
-    fn get_meta_escape_sequence(&mut self) -> Result<char, ParserError> {
-        if backslash_char!(self.lookahead_char()?) {
-            let c = self.skip_char()?;
-
-            if meta_char!(self.lookahead_char()?) {
-                self.skip_char()
-            } else {
-                self.return_char(c);
-                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
-            }
-        } else {
-            Err(ParserError::UnexpectedChar(self.lookahead_char()?, self.line_num, self.col_num))
-        }
-    }
-
     fn get_control_escape_sequence(&mut self) -> Result<char, ParserError>
     {
-        if backslash_char!(self.lookahead_char()?) {
-            let c = self.skip_char()?;
-
-            if symbolic_control_char!(self.lookahead_char()?) {
-                match self.skip_char()? {
-                    'a' => Ok('\u{07}'), // UTF-8 alert
-                    'b' => Ok('\u{08}'), // UTF-8 backspace
-                    'v' => Ok('\u{0b}'), // UTF-8 vertical tab
-                    'f' => Ok('\u{0c}'), // UTF-8 form feed
-                    't' => Ok('\t'),
-                    'n' => Ok('\n'),
-                    'r' => Ok('\r'),
-                    '0' => Ok('\u{0}'),
-                    c   => {
-                        self.return_char(c);
-                        Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
-                    }
-                }
-            } else {
-                self.return_char(c);
-                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
-            }
-        } else {
-            Err(ParserError::UnexpectedChar(self.lookahead_char()?, self.line_num, self.col_num))
-        }
+        let escaped = match self.lookahead_char()? {
+            'a' => '\u{07}', // UTF-8 alert
+            'b' => '\u{08}', // UTF-8 backspace
+            'v' => '\u{0b}', // UTF-8 vertical tab
+            'f' => '\u{0c}', // UTF-8 form feed
+            't' => '\t',
+            'n' => '\n',
+            'r' => '\r',
+            c   => return Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
+        };
+        self.skip_char()?;
+        Ok(escaped)
     }
 
     fn get_octal_escape_sequence(&mut self) -> Result<char, ParserError>
     {
-        if backslash_char!(self.lookahead_char()?) {
-            let c = self.skip_char()?;
-            let mut lac = self.lookahead_char()?;
-
-            if octal_digit_char!(lac) {
-                let mut token = String::new();
-
-                while octal_digit_char!(lac) {
-                    token.push(lac);
-
-                    self.skip_char()?;
-                    lac = self.lookahead_char()?;
-                }
-
-                if backslash_char!(lac) {
-                    self.skip_char()?;
-                    let n = Integer::from_str_radix(&token, 8)
-                          .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
-
-                    match n.to_u8() {
-                        Some(i) => Ok(char::from(i)),
-                        _ => Err(ParserError::ParseBigInt(self.line_num, self.col_num))
-                    }
-                } else {
-                    put_back_n!(self, token);
-                    self.return_char(c);
-                    Err(ParserError::UnexpectedChar(lac, self.line_num, self.col_num))
-                }
-            } else {
-                self.return_char(c);
-                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
-            }
-        } else {
-            Err(ParserError::UnexpectedChar(self.lookahead_char()?, self.line_num, self.col_num))
-        }
+        self.get_char_from_sequence(|c| octal_digit_char!(c), 8)
     }
 
     fn get_hexadecimal_escape_sequence(&mut self) -> Result<char, ParserError>
     {
-        if backslash_char!(self.lookahead_char()?) {
-            let c = self.skip_char()?;
-
-            if symbolic_hexadecimal_char!(self.lookahead_char()?) {
-                let hex_char = self.skip_char()?;
-
-                let mut lac = self.lookahead_char()?;
-                let mut token = String::new();
-
-                while hexadecimal_digit_char!(lac) {
-                    token.push(lac);
-
-                    self.skip_char()?;
-                    lac = self.lookahead_char()?;
-                }
-
-                if backslash_char!(lac) {
-                    self.skip_char()?;
-                    let n = Integer::from_str_radix(&token, 16)
-                            .map_err(|_| ParserError::ParseBigInt(self.line_num, self.col_num))?;
-
-                    match n.to_u8() {
-                        Some(n) => Ok(n as char),
-                        _ => Err(ParserError::ParseBigInt(self.line_num, self.col_num))
-                    }
-                } else {
-                    put_back_n!(self, token);
-
-                    self.return_char(hex_char);
-                    self.return_char(c);
-
-                    Err(ParserError::UnexpectedChar(lac, self.line_num, self.col_num))
-                }
-            } else {
-                self.return_char(c);
-                Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
-            }
+        self.skip_char()?;
+        let c = self.lookahead_char()?;
+        if hexadecimal_digit_char!(c) {
+            self.get_char_from_sequence(|c| hexadecimal_digit_char!(c), 16)
         } else {
-            Err(ParserError::UnexpectedChar(self.lookahead_char()?, self.line_num, self.col_num))
+            Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
+        }
+    }
+
+    fn get_char_from_sequence<F: Fn(char) -> bool>(&mut self, accept_char: F, radix: u32) -> Result<char, ParserError> {
+        let mut c = self.lookahead_char()?;
+        let mut token = String::new();
+
+        loop {
+            token.push(c);
+
+            self.skip_char()?;
+            c = self.lookahead_char()?;
+            if !accept_char(c) {
+                break;
+            }
+        }
+
+        if backslash_char!(c) {
+            self.skip_char()?;
+            u32::from_str_radix(&token, radix)
+                .map_or_else(
+                    |_| Err(ParserError::ParseBigInt(self.line_num, self.col_num)),
+                    |n| char::try_from(n)
+                        .map_err(|_| ParserError::Utf8Error(self.line_num, self.col_num))
+                )
+        } else {
+            Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
         }
     }
 
@@ -436,28 +361,22 @@ impl<'a, R: Read> Lexer<'a, R> {
         if graphic_char!(c) || alpha_numeric_char!(c) || solo_char!(c) || space_char!(c) {
             self.skip_char()
         } else {
-            self.get_meta_escape_sequence()
-                .or_else(|e| {
-                    if let ParserError::UnexpectedChar(..) = e {
-                        self.get_octal_escape_sequence()
-                    } else {
-                        Err(e)
-                    }
-                })
-                .or_else(|e| {
-                    if let ParserError::UnexpectedChar(..) = e {
-                        self.get_hexadecimal_escape_sequence()
-                    } else {
-                        Err(e)
-                    }
-                })
-                .or_else(|e| {
-                    if let ParserError::UnexpectedChar(..)= e {
-                        self.get_control_escape_sequence()
-                    } else {
-                        Err(e)
-                    }
-                })
+            if !backslash_char!(c) {
+                return Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num));
+            }
+
+            self.skip_char()?;
+
+            let c = self.lookahead_char()?;
+            if meta_char!(c) {
+                self.skip_char()
+            } else if octal_digit_char!(c) {
+                self.get_octal_escape_sequence()
+            } else if symbolic_hexadecimal_char!(c) {
+                self.get_hexadecimal_escape_sequence()
+            } else {
+                self.get_control_escape_sequence()
+            }
         }
     }
 

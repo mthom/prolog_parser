@@ -74,8 +74,20 @@ fn char_with_octseq() -> Result<(), ParserError> {
 }
 
 #[test]
+fn char_with_octseq_0() -> Result<(), ParserError> {
+    let tokens = read_all_tokens(r"'\0\' ")?;
+    assert_eq!(tokens, [Token::Constant(Constant::Char('\u{0000}'))]);
+    Ok(())
+}
+
+#[test]
 fn char_with_hexseq() -> Result<(), ParserError> {
     let tokens = read_all_tokens(r"'\x2124\' ")?;
     assert_eq!(tokens, [Token::Constant(Constant::Char('ℤ'))]); // Z math symbol
     Ok(())
+}
+
+#[test]
+fn char_with_hexseq_invalid() {
+    assert!(read_all_tokens(r"'\x\' ").is_err());
 }

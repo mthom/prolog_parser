@@ -306,7 +306,6 @@ impl<'a, R: Read> Lexer<'a, R> {
             't' => '\t',
             'n' => '\n',
             'r' => '\r',
-            '0' => '\u{0}',
             c   => return Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
         };
         self.skip_char()?;

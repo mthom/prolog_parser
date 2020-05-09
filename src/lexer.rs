@@ -296,18 +296,9 @@ impl<'a, R: Read> Lexer<'a, R> {
         }
     }
 
-    fn get_meta_escape_sequence(&mut self) -> Result<Option<char>, ParserError> {
-        let c = self.lookahead_char()?;
-        if meta_char!(c) {
-            self.skip_char().map(|c| Some(c))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn get_control_escape_sequence(&mut self) -> Result<Option<char>, ParserError>
+    fn get_control_escape_sequence(&mut self) -> Result<char, ParserError>
     {
-        let c = match self.lookahead_char()? {
+        let escaped = match self.lookahead_char()? {
             'a' => '\u{07}', // UTF-8 alert
             'b' => '\u{08}', // UTF-8 backspace
             'v' => '\u{0b}', // UTF-8 vertical tab
@@ -316,64 +307,48 @@ impl<'a, R: Read> Lexer<'a, R> {
             'n' => '\n',
             'r' => '\r',
             '0' => '\u{0}',
-            _   => return Ok(None)
+            c   => return Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
         };
         self.skip_char()?;
-        Ok(Some(c))
+        Ok(escaped)
     }
 
-    fn get_octal_escape_sequence(&mut self) -> Result<Option<char>, ParserError>
+    fn get_octal_escape_sequence(&mut self) -> Result<char, ParserError>
     {
+        self.get_char_from_sequence(|c| octal_digit_char!(c), 8)
+    }
+
+    fn get_hexadecimal_escape_sequence(&mut self) -> Result<char, ParserError>
+    {
+        self.skip_char()?;
+        let c = self.lookahead_char()?;
+        if hexadecimal_digit_char!(c) {
+            self.get_char_from_sequence(|c| hexadecimal_digit_char!(c), 16)
+        } else {
+            Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
+        }
+    }
+
+    fn get_char_from_sequence<F: Fn(char) -> bool>(&mut self, accept_char: F, radix: u32) -> Result<char, ParserError> {
         let mut c = self.lookahead_char()?;
-        if octal_digit_char!(c) {
-            let mut token = String::new();
+        let mut token = String::new();
 
-            loop {
-                token.push(c);
+        loop {
+            token.push(c);
 
-                self.skip_char()?;
-                c = self.lookahead_char()?;
-                if !octal_digit_char!(c) {
-                    break;
-                }
-            }
-
-            self.read_backslash_parse_token(&token, 8)
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn get_hexadecimal_escape_sequence(&mut self) -> Result<Option<char>, ParserError>
-    {
-        let c = self.lookahead_char()?;
-        if symbolic_hexadecimal_char!(c) {
             self.skip_char()?;
-
-            let mut token = String::new();
-            let mut c = self.lookahead_char()?;
-            while hexadecimal_digit_char!(c) {
-                token.push(c);
-
-                self.skip_char()?;
-                c = self.lookahead_char()?;
+            c = self.lookahead_char()?;
+            if !accept_char(c) {
+                break;
             }
-
-            self.read_backslash_parse_token(&token, 16)
-        } else {
-            Ok(None)
         }
-    }
 
-    fn read_backslash_parse_token(&mut self, token: &str, radix: u32) -> Result<Option<char>, ParserError> {
-        let c = self.lookahead_char()?;
         if backslash_char!(c) {
             self.skip_char()?;
             u32::from_str_radix(&token, radix)
                 .map_or_else(
                     |_| Err(ParserError::ParseBigInt(self.line_num, self.col_num)),
                     |n| char::try_from(n)
-                        .map(|c| Some(c))
                         .map_err(|_| ParserError::Utf8Error(self.line_num, self.col_num))
                 )
         } else {
@@ -393,14 +368,16 @@ impl<'a, R: Read> Lexer<'a, R> {
 
             self.skip_char()?;
 
-            for get_char_func in &[Self::get_meta_escape_sequence, Self::get_octal_escape_sequence,
-                Self::get_hexadecimal_escape_sequence, Self::get_control_escape_sequence] {
-                if let Some(c) = get_char_func(self)? {
-                    return Ok(c);
-                }
+            let c = self.lookahead_char()?;
+            if meta_char!(c) {
+                self.skip_char()
+            } else if octal_digit_char!(c) {
+                self.get_octal_escape_sequence()
+            } else if symbolic_hexadecimal_char!(c) {
+                self.get_hexadecimal_escape_sequence()
+            } else {
+                self.get_control_escape_sequence()
             }
-
-            Err(ParserError::UnexpectedChar(self.lookahead_char()?, self.line_num, self.col_num))
         }
     }
 

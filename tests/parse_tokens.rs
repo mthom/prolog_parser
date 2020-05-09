@@ -42,8 +42,33 @@ fn simple_char() -> Result<(), ParserError> {
 }
 
 #[test]
+fn char_with_meta_seq() -> Result<(), ParserError> {
+    let tokens = read_all_tokens(r#"'\\' '\'' '\"' '\`' "#)?; // use literal string so \ are escaped
+    assert_eq!(tokens, [Token::Constant(Constant::Char('\\')),
+    Token::Constant(Constant::Char('\'')),
+    Token::Constant(Constant::Char('"')),
+    Token::Constant(Constant::Char('`'))]);
+    Ok(())
+}
+
+#[test]
+fn char_with_control_seq() -> Result<(), ParserError> {
+    let tokens = read_all_tokens(r"'\a' '\b' '\r' '\f' '\t' '\n' '\v' ")?;
+    assert_eq!(tokens, [
+        Token::Constant(Constant::Char('\u{07}')),
+        Token::Constant(Constant::Char('\u{08}')),
+        Token::Constant(Constant::Char('\r')),
+        Token::Constant(Constant::Char('\u{0c}')),
+        Token::Constant(Constant::Char('\t')),
+        Token::Constant(Constant::Char('\n')),
+        Token::Constant(Constant::Char('\u{0b}')),
+    ]);
+    Ok(())
+}
+
+#[test]
 fn char_with_octseq() -> Result<(), ParserError> {
-    let tokens = read_all_tokens(r"'\60433\' ")?; // use literal string so \ are escaped
+    let tokens = read_all_tokens(r"'\60433\' ")?;
     assert_eq!(tokens, [Token::Constant(Constant::Char('愛'))]); // Japanese character
     Ok(())
 }

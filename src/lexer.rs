@@ -694,7 +694,7 @@ impl<'a, R: Read> Lexer<'a, R> {
                 } else if single_quote_char!(c) {
                     self.skip_char()?;
                     self.get_single_quoted_char()
-                        .map(|c| Token::Constant(Constant::CharCode(c as u32)))
+                        .map(|c| Token::Constant(Constant::Fixnum(c as isize)))
                         .or_else(|_| {
                             self.return_char(c);
 

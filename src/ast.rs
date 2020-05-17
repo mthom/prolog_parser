@@ -506,7 +506,6 @@ impl Hash for SharedOpDesc {
 pub enum Constant {
     Atom(ClauseName, Option<SharedOpDesc>),
     Char(char),
-    CharCode(u32),
     EmptyList,
     Fixnum(isize),
     Integer(Rc<Integer>),
@@ -527,8 +526,6 @@ impl fmt::Display for Constant {
                 },
             &Constant::Char(c) =>
                 write!(f, "'{}'", c as u32),
-            &Constant::CharCode(c) =>
-                write!(f, "{}", c),
             &Constant::EmptyList =>
                 write!(f, "[]"),
             &Constant::Fixnum(n) =>
@@ -558,17 +555,6 @@ impl PartialEq for Constant {
                 a1.as_str() == a2.as_str(),
             (&Constant::Char(c1), &Constant::Char(c2)) =>
                 c1 == c2,
-            (&Constant::CharCode(c1), &Constant::CharCode(c2)) =>
-                c1 == c2,
-            (&Constant::Char(c1), &Constant::CharCode(c2))
-          | (&Constant::CharCode(c2), &Constant::Char(c1)) =>
-                c1 as u32 == c2,
-            (&Constant::CharCode(c1), &Constant::Integer(ref c2))
-          | (&Constant::Integer(ref c2), &Constant::CharCode(c1)) =>
-              match c2.to_u32() {
-                  Some(c2) => c1 == c2,
-                  None => false
-              },
             (&Constant::Fixnum(n1), &Constant::Fixnum(n2)) =>
                 n1 == n2,
             (&Constant::Fixnum(n1), &Constant::Integer(ref n2)) |

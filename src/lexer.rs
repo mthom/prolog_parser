@@ -308,27 +308,33 @@ impl<'a, R: Read> Lexer<'a, R> {
             'r' => '\r',
             c   => return Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
         };
+
         self.skip_char()?;
         Ok(escaped)
     }
 
     fn get_octal_escape_sequence(&mut self) -> Result<char, ParserError>
     {
-        self.get_char_from_sequence(|c| octal_digit_char!(c), 8)
+        self.escape_sequence_to_char(|c| octal_digit_char!(c), 8)
     }
 
     fn get_hexadecimal_escape_sequence(&mut self) -> Result<char, ParserError>
     {
         self.skip_char()?;
         let c = self.lookahead_char()?;
+
         if hexadecimal_digit_char!(c) {
-            self.get_char_from_sequence(|c| hexadecimal_digit_char!(c), 16)
+            self.escape_sequence_to_char(|c| hexadecimal_digit_char!(c), 16)
         } else {
             Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
         }
     }
 
-    fn get_char_from_sequence<F: Fn(char) -> bool>(&mut self, accept_char: F, radix: u32) -> Result<char, ParserError> {
+    fn escape_sequence_to_char(
+        &mut self,
+        accept_char: impl Fn(char) -> bool,
+        radix: u32,
+    ) -> Result<char, ParserError> {
         let mut c = self.lookahead_char()?;
         let mut token = String::new();
 
@@ -337,6 +343,7 @@ impl<'a, R: Read> Lexer<'a, R> {
 
             self.skip_char()?;
             c = self.lookahead_char()?;
+
             if !accept_char(c) {
                 break;
             }
@@ -351,6 +358,10 @@ impl<'a, R: Read> Lexer<'a, R> {
                         .map_err(|_| ParserError::Utf8Error(self.line_num, self.col_num))
                 )
         } else {
+            // on failure, restore the token characters and backslash.
+            self.reader.put_back_all(token.chars().map(Ok));
+            self.reader.put_back(Ok('\\'));
+
             Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num))
         }
     }

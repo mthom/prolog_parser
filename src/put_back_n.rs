@@ -31,6 +31,11 @@ impl<I: Iterator> PutBackN<I> {
             self.top.last()
         }
     }
+
+    #[inline]
+    pub fn put_back_all<DEI: DoubleEndedIterator<Item = I::Item>>(&mut self, iter: DEI) {
+        self.top.extend(iter.rev());
+    }
 }
 
 impl<I: Iterator> Iterator for PutBackN<I> {

@@ -328,6 +328,24 @@ impl<'a, R: Read> Parser<'a, R> {
     fn shift(&mut self, token: Token, priority: usize, spec: Specifier)
     {
         let tt = match token {
+            Token::Constant(Constant::String(s))
+                if self.lexer.flags.double_quotes.is_codes() => {
+                    let mut list = Term::Constant(Cell::default(), Constant::EmptyList);
+
+                    for c in s.chars().rev() {
+                        list = Term::Cons(
+                            Cell::default(),
+                            Box::new(Term::Constant(
+                                Cell::default(),
+                                Constant::Fixnum(c as isize),
+                            )),
+                            Box::new(list),
+                        );
+                    }
+
+                    self.terms.push(list);
+                    TokenType::Term
+                }
             Token::Constant(c) => {
                 self.terms.push(Term::Constant(Cell::default(), c));
                 TokenType::Term

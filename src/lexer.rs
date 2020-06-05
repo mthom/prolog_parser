@@ -52,7 +52,7 @@ pub enum Token {
 pub struct Lexer<'a, R: Read> {
     pub(crate) atom_tbl: TabledData<Atom>,
     pub(crate) reader: &'a mut ParsingStream<R>,
-    flags: MachineFlags,
+    pub(crate) flags: MachineFlags,
     pub(crate) line_num: usize,
     pub(crate) col_num: usize
 }

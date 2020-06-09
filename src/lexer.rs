@@ -128,7 +128,7 @@ impl<'a, R: Read> Lexer<'a, R> {
     fn single_line_comment(&mut self) -> Result<(), ParserError>
     {
         loop {
-            if new_line_char!(self.skip_char()?) {
+            if self.eof()? || new_line_char!(self.skip_char()?) {
                 break;
             }
         }
@@ -872,6 +872,7 @@ impl<'a, R: Read> Lexer<'a, R> {
 
                 self.name_token(c)
             },
+            Err(ParserError::UnexpectedEOF) => Ok(Token::End),
             Err(e) => Err(e)
         }
     }

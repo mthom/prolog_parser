@@ -91,3 +91,17 @@ fn char_with_hexseq() -> Result<(), ParserError> {
 fn char_with_hexseq_invalid() {
     assert!(read_all_tokens(r"'\x\' ").is_err());
 }
+
+#[test]
+fn empty() -> Result<(), ParserError> {
+    let tokens = read_all_tokens("")?;
+    assert!(tokens.is_empty());
+    Ok(())
+}
+
+#[test]
+fn comment_then_eof() -> Result<(), ParserError> {
+    let tokens = read_all_tokens("% only a comment")?;
+    assert_eq!(tokens, [Token::End]);
+    Ok(())
+}

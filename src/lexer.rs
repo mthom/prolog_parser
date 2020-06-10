@@ -872,7 +872,6 @@ impl<'a, R: Read> Lexer<'a, R> {
 
                 self.name_token(c)
             },
-            Err(ParserError::UnexpectedEOF) => Ok(Token::End),
             Err(e) => Err(e)
         }
     }

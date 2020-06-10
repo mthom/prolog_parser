@@ -128,7 +128,7 @@ impl<'a, R: Read> Lexer<'a, R> {
     fn single_line_comment(&mut self) -> Result<(), ParserError>
     {
         loop {
-            if self.eof()? || new_line_char!(self.skip_char()?) {
+            if self.reader.peek().is_none() || new_line_char!(self.skip_char()?) {
                 break;
             }
         }

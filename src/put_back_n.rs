@@ -1,8 +1,9 @@
+use std::iter::Peekable;
 
 #[derive(Debug, Clone)]
 pub struct PutBackN<I: Iterator> {
     top: Vec<I::Item>,
-    iter: I,
+    iter: Peekable<I>,
 }
 
 pub fn put_back_n<I>(iterable: I) -> PutBackN<I::IntoIter>
@@ -10,7 +11,7 @@ pub fn put_back_n<I>(iterable: I) -> PutBackN<I::IntoIter>
 {
     PutBackN {
         top: Vec::new(),
-        iter: iterable.into_iter(),
+        iter: iterable.into_iter().peekable(),
     }
 }
 
@@ -27,18 +28,18 @@ impl<I: Iterator> PutBackN<I> {
     }
 
     #[inline]
-    pub fn take_iter_mut(&mut self) -> &mut I {
-        &mut self.iter
-    }
-
-    #[inline]
     pub(crate)
     fn peek(&mut self) -> Option<&I::Item> {
         if self.top.is_empty() {
-            match self.iter.next() {
-                Some(item) => {
-                    self.top.push(item);
-                    self.top.last()
+            /* This is a kludge for Ctrl-D not being
+             * handled properly if self.iter().peek() isn't called
+             * first. */
+            match self.iter.peek() {
+                Some(_) => {
+                    self.iter.next().and_then(move |item| {
+                        self.top.push(item);
+                        self.top.last()
+                    })
                 }
                 None => {
                     None

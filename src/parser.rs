@@ -222,9 +222,11 @@ fn read_tokens<'a, R: Read>(lexer: &mut Lexer<'a, R>) -> Result<Vec<Token>, Pars
 }
 
 impl<'a, R: Read> Parser<'a, R> {
-    pub
-    fn new(stream: &'a mut ParsingStream<R>, atom_tbl: TabledData<Atom>, flags: MachineFlags) -> Self
-    {
+    pub fn new(
+        stream: &'a mut ParsingStream<R>,
+        atom_tbl: TabledData<Atom>,
+        flags: MachineFlags,
+    ) -> Self {
         Parser { lexer: Lexer::new(atom_tbl, flags, stream),
                  tokens: vec![],
                  stack:  Vec::new(),
@@ -368,7 +370,7 @@ impl<'a, R: Read> Parser<'a, R> {
             Token::CloseList => TokenType::CloseList,
             Token::OpenCurly => TokenType::OpenCurly,
             Token::CloseCurly => TokenType::CloseCurly,
-            Token::End => TokenType::End
+            Token::End => TokenType::End,
         };
 
         self.stack.push(TokenDesc { tt, priority, spec });
@@ -522,7 +524,7 @@ impl<'a, R: Read> Parser<'a, R> {
 
     pub fn devour_whitespace(&mut self) -> Result<(), ParserError> {
 	    self.lexer.scan_for_layout()?;
-	    Ok(())
+        Ok(())
     }
 
     pub fn reset(&mut self) {
@@ -935,6 +937,7 @@ impl<'a, R: Read> Parser<'a, R> {
         Ok(())
     }
 
+    #[inline]
     pub fn eof(&mut self) -> Result<bool, ParserError> {
         self.lexer.eof()
     }

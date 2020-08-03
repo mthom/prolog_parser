@@ -60,17 +60,20 @@ pub struct Lexer<'a, R: Read> {
 impl<'a, R: Read + fmt::Debug> fmt::Debug for Lexer<'a, R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Lexer")
-            .field("atom_tbl", &self.atom_tbl)
-            .field("reader", &"&'a mut ParsingStream<R>")  // Hacky solution.
-            .field("line_num", &self.line_num)
-            .field("col_num", &self.col_num)
-            .finish()
+         .field("atom_tbl", &self.atom_tbl)
+         .field("reader", &"&'a mut ParsingStream<R>")  // Hacky solution.
+         .field("line_num", &self.line_num)
+         .field("col_num", &self.col_num)
+         .finish()
     }
 }
 
 impl<'a, R: Read> Lexer<'a, R> {
-    pub fn new(atom_tbl: TabledData<Atom>, flags: MachineFlags, src: &'a mut ParsingStream<R>) -> Self
-    {
+    pub fn new(
+        atom_tbl: TabledData<Atom>,
+        flags: MachineFlags,
+        src: &'a mut ParsingStream<R>,
+    ) -> Self {
         Lexer { atom_tbl, flags, reader: src, line_num: 0, col_num: 0 }
     }
 
@@ -310,7 +313,7 @@ impl<'a, R: Read> Lexer<'a, R> {
         };
 
         self.skip_char()?;
-        Ok(escaped)
+        return Ok(escaped);
     }
 
     fn get_octal_escape_sequence(&mut self) -> Result<char, ParserError>
@@ -378,15 +381,21 @@ impl<'a, R: Read> Lexer<'a, R> {
 
             self.skip_char()?;
 
-            let c = self.lookahead_char()?;
-            if meta_char!(c) {
-                self.skip_char()
-            } else if octal_digit_char!(c) {
-                self.get_octal_escape_sequence()
-            } else if symbolic_hexadecimal_char!(c) {
-                self.get_hexadecimal_escape_sequence()
-            } else {
-                self.get_control_escape_sequence()
+            loop {
+                let c = self.lookahead_char()?;
+
+                return if meta_char!(c) {
+                    self.skip_char()
+                } else if new_line_char!(c) {
+                    self.skip_char()?;
+                    continue;
+                } else if octal_digit_char!(c) {
+                    self.get_octal_escape_sequence()
+                } else if symbolic_hexadecimal_char!(c) {
+                    self.get_hexadecimal_escape_sequence()
+                } else {
+                    self.get_control_escape_sequence()
+                };
             }
         }
     }
@@ -536,7 +545,11 @@ impl<'a, R: Read> Lexer<'a, R> {
             }
         }
 
-        Ok(Token::Constant(atom!(token, self.atom_tbl)))
+        if token.as_str() == "[]" {
+            Ok(Token::Constant(Constant::EmptyList))
+        } else {
+            Ok(Token::Constant(atom!(token, self.atom_tbl)))
+        }
     }
 
     fn vacate_with_float(&mut self, mut token: String) -> Token {
@@ -755,7 +768,7 @@ impl<'a, R: Read> Lexer<'a, R> {
             let cr = self.lookahead_char();
 
             match cr {
-                Ok(c) if layout_char!(c) => {
+                Ok(c) if layout_char!(c) || new_line_char!(c) => {
                     self.skip_char()?;
                     layout_inserted = true;
                 },
@@ -813,19 +826,16 @@ impl<'a, R: Read> Lexer<'a, R> {
                         Ok(c) if layout_char!(c) || c == '%' => {
                             if new_line_char!(c) {
                                 self.skip_char()?;
-                            } else {
-                                if let Ok(c) = self.lookahead_char() {
-                                    if new_line_char!(c) {
-                                        self.skip_char()?;
-                                    }
-                                }
                             }
 
                             return Ok(Token::End);
                         },
-                        Err(ParserError::UnexpectedEOF) =>
-                            return Ok(Token::End),
-                        _ => self.return_char('.')
+                        Err(ParserError::UnexpectedEOF) => {
+                            return Ok(Token::End);
+                        }
+                        _ => {
+                            self.return_char('.');
+                        }
                     };
                 }
 

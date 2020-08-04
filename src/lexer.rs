@@ -370,18 +370,18 @@ impl<'a, R: Read> Lexer<'a, R> {
     }
 
     fn get_non_quote_char(&mut self) -> Result<char, ParserError> {
-        let c = self.lookahead_char()?;
+        loop {
+            let c = self.lookahead_char()?;
 
-        if graphic_char!(c) || alpha_numeric_char!(c) || solo_char!(c) || space_char!(c) {
-            self.skip_char()
-        } else {
-            if !backslash_char!(c) {
-                return Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num));
-            }
+            if graphic_char!(c) || alpha_numeric_char!(c) || solo_char!(c) || space_char!(c) {
+                return self.skip_char();
+            } else {
+                if !backslash_char!(c) {
+                    return Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num));
+                }
 
-            self.skip_char()?;
+                self.skip_char()?;
 
-            loop {
                 let c = self.lookahead_char()?;
 
                 return if meta_char!(c) {

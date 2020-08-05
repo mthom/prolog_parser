@@ -370,32 +370,27 @@ impl<'a, R: Read> Lexer<'a, R> {
     }
 
     fn get_non_quote_char(&mut self) -> Result<char, ParserError> {
-        loop {
+        let c = self.lookahead_char()?;
+
+        if graphic_char!(c) || alpha_numeric_char!(c) || solo_char!(c) || space_char!(c) {
+            self.skip_char()
+        } else {
+            if !backslash_char!(c) {
+                return Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num));
+            }
+
+            self.skip_char()?;
+
             let c = self.lookahead_char()?;
 
-            if graphic_char!(c) || alpha_numeric_char!(c) || solo_char!(c) || space_char!(c) {
-                return self.skip_char();
+            if meta_char!(c) {
+                self.skip_char()
+            } else if octal_digit_char!(c) {
+                self.get_octal_escape_sequence()
+            } else if symbolic_hexadecimal_char!(c) {
+                self.get_hexadecimal_escape_sequence()
             } else {
-                if !backslash_char!(c) {
-                    return Err(ParserError::UnexpectedChar(c, self.line_num, self.col_num));
-                }
-
-                self.skip_char()?;
-
-                let c = self.lookahead_char()?;
-
-                return if meta_char!(c) {
-                    self.skip_char()
-                } else if new_line_char!(c) {
-                    self.skip_char()?;
-                    continue;
-                } else if octal_digit_char!(c) {
-                    self.get_octal_escape_sequence()
-                } else if symbolic_hexadecimal_char!(c) {
-                    self.get_hexadecimal_escape_sequence()
-                } else {
-                    self.get_control_escape_sequence()
-                };
+                self.get_control_escape_sequence()
             }
         }
     }
@@ -559,8 +554,7 @@ impl<'a, R: Read> Lexer<'a, R> {
         Token::Constant(Constant::Float(result))
     }
 
-    pub
-    fn number_token(&mut self) -> Result<Token, ParserError> {
+    pub fn number_token(&mut self) -> Result<Token, ParserError> {
         let mut token = String::new();
 
         token.push(self.skip_char()?);
@@ -717,8 +711,24 @@ impl<'a, R: Read> Lexer<'a, R> {
                         })
                 } else if single_quote_char!(c) {
                     self.skip_char()?;
+
+                    if backslash_char!(self.lookahead_char()?) {
+                        self.skip_char()?;
+
+                        if new_line_char!(self.lookahead_char()?) {
+                            self.return_char('\\');
+                            self.return_char('\'');
+
+                            return Ok(Token::Constant(Constant::Fixnum(0)));
+                        } else {
+                            self.return_char('\\');
+                        }
+                    }
+
                     self.get_single_quoted_char()
-                        .map(|c| Token::Constant(Constant::Fixnum(c as isize)))
+                        .and_then(|c| {
+                            Ok(Token::Constant(Constant::Fixnum(c as isize)))
+                        })
                         .or_else(|_| {
                             self.return_char(c);
 

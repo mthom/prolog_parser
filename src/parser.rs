@@ -952,7 +952,7 @@ impl<'a, R: Read> Parser<'a, R> {
 
         self.reduce_op(1400);
 
-        if self.terms.len() > 1 {
+        if self.terms.len() > 1 || self.stack.len() > 1 {
             return Err(ParserError::IncompleteReduction(self.lexer.line_num, self.lexer.col_num));
         }
 

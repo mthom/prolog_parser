@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::io::{Bytes, Error as IOError, Read};
+use std::ops::Deref;
 use std::rc::Rc;
 use std::vec::Vec;
 
@@ -228,21 +229,16 @@ impl GenContext {
 pub type OpDirKey = (ClauseName, Fixity);
 
 #[derive(Debug, Clone)]
-pub struct OpDirValue(pub SharedOpDesc, pub ClauseName);
+pub struct OpDirValue(pub SharedOpDesc);
 
 impl OpDirValue {
-    pub fn new(spec: Specifier, priority: usize, module_name: ClauseName) -> Self {
-        OpDirValue(SharedOpDesc::new(priority, spec), module_name)
+    pub fn new(spec: Specifier, priority: usize) -> Self {
+        OpDirValue(SharedOpDesc::new(priority, spec))
     }
 
     #[inline]
     pub fn shared_op_desc(&self) -> SharedOpDesc {
         self.0.clone()
-    }
-
-    #[inline]
-    pub fn owning_module(&self) -> ClauseName {
-        self.1.clone()
     }
 }
 
@@ -298,13 +294,12 @@ impl Default for DoubleQuotes {
 }
 
 pub fn default_op_dir() -> OpDir {
-    let module_name = clause_name!("builtins");
     let mut op_dir = OpDir::new();
 
-    op_dir.insert((clause_name!(":-"), Fixity::In),  OpDirValue::new(XFX, 1200, module_name.clone()));
-    op_dir.insert((clause_name!(":-"), Fixity::Pre), OpDirValue::new(FX,  1200, module_name.clone()));
-    op_dir.insert((clause_name!("?-"), Fixity::Pre), OpDirValue::new(FX,  1200, module_name.clone()));
-    op_dir.insert((clause_name!(","), Fixity::In),   OpDirValue::new(XFY, 1000, module_name.clone()));
+    op_dir.insert((clause_name!(":-"), Fixity::In),  OpDirValue::new(XFX, 1200));
+    op_dir.insert((clause_name!(":-"), Fixity::Pre), OpDirValue::new(FX,  1200));
+    op_dir.insert((clause_name!("?-"), Fixity::Pre), OpDirValue::new(FX,  1200));
+    op_dir.insert((clause_name!(","), Fixity::In),   OpDirValue::new(XFY, 1000));
 
     op_dir
 }
@@ -317,31 +312,15 @@ pub enum ArithmeticError {
 
 #[derive(Debug)]
 pub enum ParserError {
-    Arithmetic(ArithmeticError),
     BackQuotedString(usize, usize),
-    BadPendingByte,
-    CannotParseCyclicTerm,
     UnexpectedChar(char, usize, usize),
     UnexpectedEOF,
     IO(IOError),
-    ExpectedRel,
-    ExpectedTopLevelTerm,
-    InadmissibleFact,
-    InadmissibleQueryTerm,
     IncompleteReduction(usize, usize),
-    InconsistentEntry,
-    InvalidDoubleQuotesDecl,
-    InvalidHook,
-    InvalidModuleDecl,
-    InvalidModuleExport,
-    InvalidRuleHead,
-    InvalidUseModuleDecl,
-    InvalidModuleResolution,
     InvalidSingleQuotedCharacter(char),
     MissingQuote(usize, usize),
     NonPrologChar(usize, usize),
     ParseBigInt(usize, usize),
-    ParseFloat(usize, usize),
     Utf8Error(usize, usize)
 }
 
@@ -354,7 +333,6 @@ impl ParserError {
           | &ParserError::MissingQuote(line_num, col_num)
           | &ParserError::NonPrologChar(line_num, col_num)
           | &ParserError::ParseBigInt(line_num, col_num)
-          | &ParserError::ParseFloat(line_num, col_num)
           | &ParserError::Utf8Error(line_num, col_num) =>
                 Some((line_num, col_num)),
             _ =>
@@ -364,42 +342,14 @@ impl ParserError {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            &ParserError::Arithmetic(..) =>
-                "arithmetic_error",
             &ParserError::BackQuotedString(..) =>
                 "back_quoted_string",
-            &ParserError::BadPendingByte =>
-                "bad_pending_byte",
             &ParserError::UnexpectedChar(..) =>
                 "unexpected_char",
             &ParserError::UnexpectedEOF =>
                 "unexpected_end_of_file",
-            &ParserError::ExpectedRel =>
-                "expected_relation",
-            &ParserError::ExpectedTopLevelTerm =>
-                "expected_atom_or_cons_or_clause",
-            &ParserError::InadmissibleFact =>
-                "inadmissible_fact",
-            &ParserError::InadmissibleQueryTerm =>
-                "inadmissible_query_term",
             &ParserError::IncompleteReduction(..) =>
                 "incomplete_reduction",
-            &ParserError::InconsistentEntry =>
-                "inconsistent_entry",
-            &ParserError::InvalidDoubleQuotesDecl =>
-                "invalid_double_quotes_declaration",
-            &ParserError::InvalidHook =>
-                "invalid_hook",
-            &ParserError::InvalidModuleDecl =>
-                "invalid_module_declaration",
-            &ParserError::InvalidModuleExport =>
-                "invalid_module_export",
-            &ParserError::InvalidModuleResolution =>
-                "invalid_module_resolution",
-            &ParserError::InvalidRuleHead =>
-                "invalid_head_of_rule",
-            &ParserError::InvalidUseModuleDecl =>
-                "invalid_use_module_declaration",
             &ParserError::InvalidSingleQuotedCharacter(..) =>
                 "invalid_single_quoted_character",
             &ParserError::IO(_) =>
@@ -410,19 +360,9 @@ impl ParserError {
                 "non_prolog_character",
             &ParserError::ParseBigInt(..) =>
                 "cannot_parse_big_int",
-            &ParserError::ParseFloat(..) =>
-                "cannot_parse_float",
             &ParserError::Utf8Error(..) =>
                 "utf8_conversion_error",
-            &ParserError::CannotParseCyclicTerm =>
-                "cannot_parse_cyclic_term"
         }
-    }
-}
-
-impl From<ArithmeticError> for ParserError {
-    fn from(err: ArithmeticError) -> ParserError {
-        ParserError::Arithmetic(err)
     }
 }
 
@@ -439,6 +379,35 @@ impl From<&IOError> for ParserError {
         } else {
             ParserError::IO(error.kind().into())
         }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy)]
+pub struct CompositeOpDir<'a, 'b> {
+    pub primary_op_dir: Option<&'b OpDir>,
+    pub secondary_op_dir: &'a OpDir,
+}
+
+impl<'a, 'b> CompositeOpDir<'a, 'b>
+{
+    #[inline]
+    pub fn new(secondary_op_dir: &'a OpDir, primary_op_dir: Option<&'b OpDir>) -> Self {
+        CompositeOpDir { primary_op_dir, secondary_op_dir }
+    }
+
+    #[inline]
+    pub(crate)
+    fn get(&self, name: ClauseName, fixity: Fixity) -> Option<&OpDirValue>
+    {
+        let entry =
+            if let Some(ref primary_op_dir) = &self.primary_op_dir {
+                primary_op_dir.get(&(name.clone(), fixity))
+            } else {
+                None
+            };
+
+        entry.or_else(move || self.secondary_op_dir.get(&(name, fixity)))
     }
 }
 
@@ -489,6 +458,15 @@ impl SharedOpDesc {
     #[inline]
     pub fn assoc(&self) -> Specifier {
         self.0.get().1
+    }
+}
+
+impl Deref for SharedOpDesc {
+    type Target = Cell<(usize, Specifier)>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
     }
 }
 
@@ -788,45 +766,6 @@ impl Term {
             &Term::Clause(_, _, ref child_terms, ..) => child_terms.len(),
             _ => 0
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct CompositeOp<'a, 'b> {
-    pub op_dir: &'a OpDir,
-    pub static_op_dir: Option<&'b OpDir>
-}
-
-#[macro_export]
-macro_rules! composite_op {
-    ($include_machine_p:expr, $op_dir:expr, $machine_op_dir:expr) => (
-        CompositeOp { op_dir: $op_dir,
-                      static_op_dir: if !$include_machine_p {
-                          Some($machine_op_dir)
-                      } else {
-                          None
-                      }}
-    );
-    ($op_dir:expr) => (
-        CompositeOp { op_dir: $op_dir, static_op_dir: None }
-    )
-}
-
-impl<'a, 'b> CompositeOp<'a, 'b>
-{
-    #[inline]
-    pub(crate)
-    fn get(&self, name: ClauseName, fixity: Fixity) -> Option<OpDirValue>
-    {
-        let entry =
-            if let Some(ref static_op_dir) = &self.static_op_dir {
-                static_op_dir.get(&(name.clone(), fixity))
-            } else {
-                None
-            };
-
-        entry.or_else(move || self.op_dir.get(&(name, fixity)))
-             .cloned()
     }
 }
 
